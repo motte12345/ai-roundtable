@@ -1,0 +1,22 @@
+-- 初期20議題（SPEC.md の決定事項）
+INSERT INTO topics (title, genre, status, source, created_at) VALUES
+  ('テセウスの船は同じ船か', 'sf', 'pending', 'seed', strftime('%s','now')),
+  ('シミュレーション仮説は信じるべきか', 'sf', 'pending', 'seed', strftime('%s','now')),
+  ('不老不死の薬があれば飲むべきか', 'sf', 'pending', 'seed', strftime('%s','now')),
+  ('もし人類が宇宙進出するなら最初の目的地は', 'sf', 'pending', 'seed', strftime('%s','now')),
+  ('猫と犬、どちらと暮らす方が幸せか', 'lifestyle', 'pending', 'seed', strftime('%s','now')),
+  ('朝型 vs 夜型、どちらが人生得か', 'lifestyle', 'pending', 'seed', strftime('%s','now')),
+  ('都会暮らし vs 田舎暮らし、豊かなのは', 'lifestyle', 'pending', 'seed', strftime('%s','now')),
+  ('紙の本 vs 電子書籍、本質的に優れているのは', 'lifestyle', 'pending', 'seed', strftime('%s','now')),
+  ('最強の朝食メニューを決める', 'lifestyle', 'pending', 'seed', strftime('%s','now')),
+  ('AIに法的人格を与えるべきか', 'tech', 'pending', 'seed', strftime('%s','now')),
+  ('AIアートに著作権はあるか', 'tech', 'pending', 'seed', strftime('%s','now')),
+  ('リモートワーク vs 出社、優れているのは', 'tech', 'pending', 'seed', strftime('%s','now')),
+  ('スマートフォンを毎日使うべきか', 'tech', 'pending', 'seed', strftime('%s','now')),
+  ('完璧な天気予報は社会を幸せにするか', 'ethics', 'pending', 'seed', strftime('%s','now')),
+  ('全員の年収が公開される社会は良いか', 'ethics', 'pending', 'seed', strftime('%s','now')),
+  ('嘘をつくことは絶対に悪か', 'ethics', 'pending', 'seed', strftime('%s','now')),
+  ('努力は才能に勝てるか', 'philosophy', 'pending', 'seed', strftime('%s','now')),
+  ('お金と時間、どちらが大事か', 'philosophy', 'pending', 'seed', strftime('%s','now')),
+  ('ハッピーエンドは物語に必須か', 'philosophy', 'pending', 'seed', strftime('%s','now')),
+  ('友情と家族愛、どちらが強いか', 'philosophy', 'pending', 'seed', strftime('%s','now'));

@@ -1,0 +1,46 @@
+{
+  "name": "ai-roundtable",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "discuss": "tsx scripts/run-discussion.ts",
+    "generate:ogp": "node scripts/generate-ogp.mjs",
+    "backfill:genres": "tsx scripts/backfill-genres.ts",
+    "dedupe:topics": "tsx scripts/dedupe-topics.ts",
+    "backfill:seo": "tsx scripts/backfill-seo-titles.ts",
+    "backfill:highlights": "tsx scripts/backfill-highlights.ts",
+    "backfill:audio": "tsx scripts/backfill-audio.ts",
+    "worker:dev": "node scripts/ensure-dist.mjs && wrangler dev --test-scheduled",
+    "worker:deploy": "npm run build && wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply ai-roundtable --local",
+    "db:migrate:remote": "wrangler d1 migrations apply ai-roundtable --remote",
+    "db:apply:local": "wrangler d1 execute ai-roundtable --local --file workers/migrations/0001_init.sql && wrangler d1 execute ai-roundtable --local --file workers/migrations/0002_seed_topics.sql && wrangler d1 execute ai-roundtable --local --file workers/migrations/0004_dedupe_messages.sql && wrangler d1 execute ai-roundtable --local --file workers/migrations/0003_unique_messages.sql && wrangler d1 execute ai-roundtable --local --file workers/migrations/0005_add_seo_title.sql && wrangler d1 execute ai-roundtable --local --file workers/migrations/0006_add_highlights.sql && wrangler d1 execute ai-roundtable --local --file workers/migrations/0007_add_votes.sql && wrangler d1 execute ai-roundtable --local --file workers/migrations/0008_add_host_memo.sql && wrangler d1 execute ai-roundtable --local --file workers/migrations/0009_add_audio_path.sql",
+    "db:apply:remote": "wrangler d1 execute ai-roundtable --remote --file workers/migrations/0001_init.sql && wrangler d1 execute ai-roundtable --remote --file workers/migrations/0002_seed_topics.sql && wrangler d1 execute ai-roundtable --remote --file workers/migrations/0004_dedupe_messages.sql && wrangler d1 execute ai-roundtable --remote --file workers/migrations/0003_unique_messages.sql && wrangler d1 execute ai-roundtable --remote --file workers/migrations/0005_add_seo_title.sql && wrangler d1 execute ai-roundtable --remote --file workers/migrations/0006_add_highlights.sql && wrangler d1 execute ai-roundtable --remote --file workers/migrations/0007_add_votes.sql && wrangler d1 execute ai-roundtable --remote --file workers/migrations/0008_add_host_memo.sql && wrangler d1 execute ai-roundtable --remote --file workers/migrations/0009_add_audio_path.sql",
+    "db:dedupe:local": "wrangler d1 execute ai-roundtable --local --file workers/migrations/0004_dedupe_messages.sql && wrangler d1 execute ai-roundtable --local --file workers/migrations/0003_unique_messages.sql",
+    "db:console:local": "wrangler d1 execute ai-roundtable --local --command",
+    "db:console:remote": "wrangler d1 execute ai-roundtable --remote --command"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251201.0",
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "dotenv": "^16.4.7",
+    "sharp": "^0.34.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "wrangler": "^4.90.0"
+  }
+}

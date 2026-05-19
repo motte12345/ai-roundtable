@@ -1,0 +1,22 @@
+[
+  { "id": 1,  "title": "テセウスの船は同じ船か", "genre": "sf" },
+  { "id": 2,  "title": "シミュレーション仮説は信じるべきか", "genre": "sf" },
+  { "id": 3,  "title": "不老不死の薬があれば飲むべきか", "genre": "sf" },
+  { "id": 4,  "title": "もし人類が宇宙進出するなら最初の目的地は", "genre": "sf" },
+  { "id": 5,  "title": "猫と犬、どちらと暮らす方が幸せか", "genre": "lifestyle" },
+  { "id": 6,  "title": "朝型 vs 夜型、どちらが人生得か", "genre": "lifestyle" },
+  { "id": 7,  "title": "都会暮らし vs 田舎暮らし、豊かなのは", "genre": "lifestyle" },
+  { "id": 8,  "title": "紙の本 vs 電子書籍、本質的に優れているのは", "genre": "lifestyle" },
+  { "id": 9,  "title": "最強の朝食メニューを決める", "genre": "lifestyle" },
+  { "id": 10, "title": "AIに法的人格を与えるべきか", "genre": "tech" },
+  { "id": 11, "title": "AIアートに著作権はあるか", "genre": "tech" },
+  { "id": 12, "title": "リモートワーク vs 出社、優れているのは", "genre": "tech" },
+  { "id": 13, "title": "スマートフォンを毎日使うべきか", "genre": "tech" },
+  { "id": 14, "title": "完璧な天気予報は社会を幸せにするか", "genre": "ethics" },
+  { "id": 15, "title": "全員の年収が公開される社会は良いか", "genre": "ethics" },
+  { "id": 16, "title": "嘘をつくことは絶対に悪か", "genre": "ethics" },
+  { "id": 17, "title": "努力は才能に勝てるか", "genre": "philosophy" },
+  { "id": 18, "title": "お金と時間、どちらが大事か", "genre": "philosophy" },
+  { "id": 19, "title": "ハッピーエンドは物語に必須か", "genre": "philosophy" },
+  { "id": 20, "title": "友情と家族愛、どちらが強いか", "genre": "philosophy" }
+]

@@ -1,0 +1,43 @@
+name = "ai-roundtable"
+main = "workers/index.ts"
+compatibility_date = "2026-05-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Cron Trigger: 15分間隔でターン進行
+[triggers]
+crons = ["*/15 * * * *"]
+
+# D1 database
+# 初回セットアップ:
+#   wrangler d1 create ai-roundtable
+# で発行された database_id をここに貼る
+[[d1_databases]]
+binding = "DB"
+database_name = "ai-roundtable"
+database_id = "113c1b70-4218-4346-b09f-b864be521712"
+migrations_dir = "workers/migrations"
+
+# 静的アセット（フロントの dist/ を配信）
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# 環境変数（API キーは secrets で別途設定:
+#   wrangler secret put GEMINI_API_KEY
+#   wrangler secret put GROQ_API_KEY
+#   wrangler secret put CEREBRAS_API_KEY
+#   wrangler secret put MISTRAL_API_KEY  # ハイライト生成用
+#   wrangler secret put TURNSTILE_SECRET_KEY  # 議題候補投票の bot 対策
+# )
+# Workers AI (議題完了時に各発言の音声を MeloTTS で生成)
+[ai]
+binding = "AI"
+
+# R2 (生成済み音声 MP3 を保存。10GB 無料、egress 無料)
+[[r2_buckets]]
+binding = "AUDIO"
+bucket_name = "ai-roundtable-audio"
+
+[vars]
+ENVIRONMENT = "production"
