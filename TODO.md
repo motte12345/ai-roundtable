@@ -37,6 +37,12 @@
 - [ ] **修正後の目視検証（要観察）** — b508f9e3 反映後に投稿される Skeptic/Zen ターンが ≤300字×2投稿に正しく分かれ、`(1/2)(2/2)`・`（続き）`が付き繋がるか確認（現 thread #429 は途中からこの挙動に切替わる混在）
 - [ ] **`bot` セルフラベル** — アカウントのプロフィールに付いているか確認（規約ベストプラクティス）
 
+### モデル更新・要観察（2026-06-24）
+- [x] **Gemini 3.x へ更新** — Optimist=`gemini-3.5-flash` / Host=`gemini-3.1-flash-lite`（実API検証済、デプロイ Version 109b4513）
+- [ ] **3.x 移行後の品質観察** — 2-3議題ぶん、Optimist/Host の口調・字数遵守・thinking途切れ無しを確認。429（無料枠超過）が出ないかも監視
+- [ ] **【要調査】ハイライト全滅バグ** — 直近完了 #422〜429 が8件連続で `highlights IS NULL`（SEOタイトルは出ている）。ハイライトは Mistral→Groq8B fallback。Mistral キー失効か、生成/JSONパース失敗か、best-effort catch で握り潰されているか不明。本番ログ（`[highlights] error`）か backfill 再実行で切り分け。**Bluselyとは無関係の既存機能の劣化**
+- [ ] **（任意）seo-title/host-memo も Gemini 3.x 化** — 現状 gemini-2.5-flash / 2.5-flash-lite のまま。上げるなら別途
+
 ## 未実装の機能候補
 
 ### 高優先（実装済の延長で効くもの）

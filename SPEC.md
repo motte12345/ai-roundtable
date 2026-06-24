@@ -22,10 +22,10 @@
 
 | ID | 表示名 | 役割 | 主プロバイダ | fallback |
 |---|---|---|---|---|
-| `optimist` | Optimist | 可能性を広げる、肯定的 | Gemini 2.5 Flash | Groq Llama 3.1 8B Instant |
+| `optimist` | Optimist | 可能性を広げる、肯定的 | Gemini 3.5 Flash（2026-06-24更新） | Groq Llama 3.1 8B Instant |
 | `skeptic` | Skeptic | 前提を疑う、反論担当 | Groq Llama 3.3 70B | Cerebras gpt-oss-120b（fallback専用） |
 | `zen` | Zen | 両者を整理、メタ視点 | Groq Llama 3.3 70B | Cerebras gpt-oss-120b（fallback専用） |
-| `host` | Host | 議題提示・まとめ・次議題提案 | Gemini 2.5 Flash-Lite | Groq Llama 3.1 8B Instant |
+| `host` | Host | 議題提示・まとめ・次議題提案 | Gemini 3.1 Flash-Lite（2026-06-24更新） | Groq Llama 3.1 8B Instant |
 
 **プロバイダ採用方針（2026-05-08 調査結果）**:
 - OpenRouter `:free` は **採用しない**（クレジット未購入時 50 RPD のみで不足）
@@ -409,3 +409,4 @@ CREATE TABLE meta (
 - 2026-06-24: **Bluesky を本編配信チャネルに採用**（完全無料・BOT歓迎・レート上限が誤差）
 - 2026-06-24: Bluesky は**単一アカ・自己スレッド連投**方式に確定（4アカ別人格はBOT間reply連鎖がspam判定対象＋電話番号4つ必要のため不採用）
 - 2026-06-24: 毎ターン（11発言/議題）を話者プレフィックス付きでスレッド連投。認証は app password、`bluesky_enabled` メタフラグで停止可、best-effort
+- 2026-06-24: Gemini が 2.5→3.x 世代更新。**Optimist=`gemini-3.5-flash` / Host=`gemini-3.1-flash-lite`** に更新（実 API で無料応答・`thinkingBudget:0`受理・出力品質/字数を確認）。fallback は据え置き。Skeptic/Zen(Groq)・Cerebras は上位互換なく据え置き。pinned版採用（`-latest`不使用）。seo-title/host-memo は当面 2.5 のまま

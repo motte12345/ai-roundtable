@@ -126,7 +126,8 @@ function createGeminiProvider(model: string, apiKey: string): Provider {
           generationConfig: {
             maxOutputTokens: req.maxTokens ?? 400,
             temperature: req.temperature ?? 0.85,
-            // Gemini 2.5 系は thinking がデフォルトONで maxOutputTokens を消費する
+            // Gemini 2.5/3.x は thinking がデフォルトONで maxOutputTokens を消費する。
+            // 議論発言には不要なので 0 に固定（3.x でも受理されることを実 API で確認済み）
             thinkingConfig: { thinkingBudget: 0 },
           },
         }),
@@ -173,14 +174,16 @@ interface ProviderAssignment {
   fallback: Provider;
 }
 
+// 2026-06-24: Gemini 3.x へ更新（Optimist/Host）。無料キーで実応答・thinkingBudget:0 受理・
+// 出力品質/字数とも 2.5 と同等以上を実 API で確認済み。pinned版を使う（-latest は挙動が動くため）。
 function geminiFlash(env: ProviderEnv): Provider {
   if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
-  return createGeminiProvider('gemini-2.5-flash', env.GEMINI_API_KEY);
+  return createGeminiProvider('gemini-3.5-flash', env.GEMINI_API_KEY);
 }
 
 function geminiFlashLite(env: ProviderEnv): Provider {
   if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
-  return createGeminiProvider('gemini-2.5-flash-lite', env.GEMINI_API_KEY);
+  return createGeminiProvider('gemini-3.1-flash-lite', env.GEMINI_API_KEY);
 }
 
 function groqLlama70B(env: ProviderEnv): Provider {
