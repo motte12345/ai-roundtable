@@ -423,6 +423,26 @@ export class DB {
     return row ? { uri: row.bluesky_uri, cid: row.bluesky_cid } : null;
   }
 
+  /**
+   * topicId 内で turn_no < beforeTurn かつ投稿済みのうち、最も新しいターンの post ref を返す。
+   * 親を「直前ターン固定」でなく「直近の投稿成功ターン」にすることで、途中ターンの投稿失敗
+   * （一時的な Bluesky 障害など）からスレッドを自動復帰させる（カスケード停止を防ぐ）。
+   */
+  async getLatestPostedBskyRefBefore(
+    topicId: number,
+    beforeTurn: number,
+  ): Promise<{ uri: string; cid: string } | null> {
+    const row = await this.d1
+      .prepare(
+        `SELECT bluesky_uri, bluesky_cid FROM messages
+         WHERE topic_id = ? AND turn_no < ? AND bluesky_uri IS NOT NULL
+         ORDER BY turn_no DESC LIMIT 1`,
+      )
+      .bind(topicId, beforeTurn)
+      .first<{ bluesky_uri: string; bluesky_cid: string }>();
+    return row ? { uri: row.bluesky_uri, cid: row.bluesky_cid } : null;
+  }
+
   /** メッセージに Bluesky post 参照を保存（投稿成功直後に呼ぶ） */
   async updateMessageBskyRef(
     messageId: number,

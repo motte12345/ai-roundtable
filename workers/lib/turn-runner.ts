@@ -156,9 +156,8 @@ export async function advanceOneTurn(ctx: RunContext): Promise<TurnResult> {
   //   bluesky_enabled='0' で停止可。
   // 冪等性: addMessage の UNIQUE 制約に勝った instance だけがここに来る + 投稿済みは
   //   bluesky_uri で判定されるため、cron 二重発火でも二重投稿しない。
-  // 既知の失敗モード: postRecord 成功 → updateMessageBskyRef 完了前に Worker がクラッシュした
-  //   場合、その投稿は Bluesky 上に存在するが bluesky_uri は NULL のまま残る。次ターンは
-  //   root/parent 欠落でスキップされ、スレッドはそのターンで途中終了する（best-effort 許容）。
+  // 親は「直近で投稿成功したターン」にするので、途中ターンが1回失敗してもスレッドは死なず、
+  //   次ターンで自動復帰する（root=turn1 だけは必要。turn1 失敗時のみそのトピックは投稿しない）。
   if (env.BLUESKY_IDENTIFIER && env.BLUESKY_APP_PASSWORD) {
     try {
       if ((await db.getMeta('bluesky_enabled')) === '0') {
@@ -168,11 +167,11 @@ export async function advanceOneTurn(ctx: RunContext): Promise<TurnResult> {
         let parentRef: BskyPostRef | null = null;
         let canPost = true;
 
-        // turn2 以降は root(turn1) と parent(turn N-1) の参照が揃って初めて投稿できる。
+        // turn2 以降は root(turn1) と parent(直近の投稿成功ターン) が揃って初めて投稿できる。
         // turn1 が未投稿（root欠落）なら以降のスレッドは作らない（orphan reply を散らさない）。
         if (nextTurnNo > 1) {
           rootRef = await db.getMessageBskyRef(active.id, 1);
-          parentRef = await db.getMessageBskyRef(active.id, nextTurnNo - 1);
+          parentRef = await db.getLatestPostedBskyRefBefore(active.id, nextTurnNo);
           if (!rootRef || !parentRef) {
             console.log(
               `[bluesky] missing thread ref (root=${!!rootRef} parent=${!!parentRef}) topic ${active.id} turn ${nextTurnNo}, skip`,
