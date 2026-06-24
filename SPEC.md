@@ -22,7 +22,7 @@
 
 | ID | 表示名 | 役割 | 主プロバイダ | fallback |
 |---|---|---|---|---|
-| `optimist` | Optimist | 可能性を広げる、肯定的 | Gemini 3.5 Flash（2026-06-24更新） | Groq Llama 3.1 8B Instant |
+| `optimist` | Optimist | 可能性を広げる、肯定的 | Gemini 2.5 Flash（3.5-flashは503多発で差し戻し 2026-06-25） | Groq Llama 3.1 8B Instant |
 | `skeptic` | Skeptic | 前提を疑う、反論担当 | Groq Llama 3.3 70B | Cerebras gpt-oss-120b（fallback専用） |
 | `zen` | Zen | 両者を整理、メタ視点 | Workers AI Llama 3.3 70B fp8-fast（2026-06-25更新） | Groq Llama 3.3 70B |
 | `host` | Host | 議題提示・まとめ・次議題提案 | Gemini 3.1 Flash-Lite（2026-06-24更新） | Groq Llama 3.1 8B Instant |

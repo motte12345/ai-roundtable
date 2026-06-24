@@ -359,7 +359,8 @@ export function extractNextTopicProposals(closingText: string): ParsedProposal[]
 
     // 末尾の `[xxx]` を取り出す
     let genre: Genre | null = null;
-    const genreMatch = rest.match(/^(.*?)\s*\[([a-zA-Z_]+)\]\s*$/);
+    // `[tech]` と、モデルが時々出す `[{tech}]`（波括弧入り）の両方を許容する
+    const genreMatch = rest.match(/^(.*?)\s*\[\{?([a-zA-Z_]+)\}?\]\s*$/);
     if (genreMatch) {
       rest = genreMatch[1].trim();
       const candidate = genreMatch[2].toLowerCase();

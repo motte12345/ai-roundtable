@@ -39,7 +39,10 @@
 
 ### Workers AI 導入（2026-06-25）
 - [x] **Cloudflare Workers AI をプロバイダ追加** — `createWorkersAiProvider`（`env.AI.run()`、外部キー不要）。Zen primary を `@cf/meta/llama-3.3-70b-instruct-fp8-fast` に、Groq 70B を fallback に。Groq 70B の TPD ボトルネック解消狙い。code-reviewer APPROVE、デプロイ Version a2976185、コミット f3233de
-- [ ] **【要確認】Zen が実際に Workers AI で生成されるか** — 次の Zen ターン（議題432 turn4 など）後に確認：`SELECT turn_no,provider,model,length(content) FROM messages WHERE topic_id=432 AND speaker='zen'`。provider が `workers-ai` なら成功＝ボトルネック解消。`groq` なら fallback 動作（Workers AI 失敗）→ 原因調査（neuron枯渇/権限/レスポンス形）。日本語品質も content で目視
+- [x] **Workers AI 失敗の原因特定・修正** — 当初 provider=groq に fallback していた。原因は二重バグ：① `env.AI.run` を detach 呼び出しで `this` ロスト（`#options` エラー）② 新モデルは OpenAI 形式 `choices[0].message.content` を返す（`{response}` でなく）。両方修正＋一時プローブで疎通確認（"こんにちは。"）。デプロイ 09653489。詳細 KNOWLEDGE
+- [ ] **【要確認】Zen が workers-ai になるか** — 修正後の次の Zen ターンで `SELECT turn_no,provider,model FROM messages WHERE speaker='zen' ORDER BY id DESC LIMIT 3`。`workers-ai` なら成功＝Groq 70B ボトルネック解消。neuron 消費も様子見
+- [x] **Optimist の gemini-3.5-flash 503 多発を修正** — 503(high demand) で毎回 groq 8B に劣化していた → 実績ある `gemini-2.5-flash` に差し戻し（Host=3.1-flash-lite と別モデルで枠分離）
+- [x] **タイトル `[{tech}]` 混入バグ修正** — Host テンプレの `[{ジャンル}]` プレースホルダが literal 出力されていた。`[ジャンル]` に修正＋パーサ防御＋既存109件のタイトルをDB掃除済み
 - [ ] **【要確認】neuron 消費** — Workers AI 無料枠 10k neurons/日。Zen ~32 RPD で収まるか。枯渇すると Groq に fallback（無害だが解消効果が薄れる）。`/api/tts-status` 的な可視化や neuron budget guard 追加は効果を見てから判断
 - [ ] **【軽微バグ】議題タイトルにジャンルタグ混入** — 議題432 のタイトルが「AIとの「対話」で自己理解を深めるか **[{tech}]**」。Host closing の次議題パースで `[genre]` 表記がタイトルに残るケースがある（`extractNextTopicProposals` の正規表現 or genre 抽出漏れ）。要調査・別件
 

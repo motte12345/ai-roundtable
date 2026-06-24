@@ -175,11 +175,14 @@ interface ProviderAssignment {
   fallback: Provider;
 }
 
-// 2026-06-24: Gemini 3.x へ更新（Optimist/Host）。無料キーで実応答・thinkingBudget:0 受理・
-// 出力品質/字数とも 2.5 と同等以上を実 API で確認済み。pinned版を使う（-latest は挙動が動くため）。
+// Gemini は pinned版を使う（-latest は挙動が動くため）。thinkingBudget:0 受理を実 API で確認済み。
+// 2026-06-25: Optimist は一度 gemini-3.5-flash に上げたが無料枠で 503(high demand) が多発し
+// 毎回 groq 8B に fallback して劣化したため、実績ある gemini-2.5-flash に戻す。Host の
+// gemini-3.1-flash-lite とは別モデルにして、レート枠の分離と文体の多様性を保つ。
+// （3.5-flash の混雑が解消したら再検討）
 function geminiFlash(env: ProviderEnv): Provider {
   if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
-  return createGeminiProvider('gemini-3.5-flash', env.GEMINI_API_KEY);
+  return createGeminiProvider('gemini-2.5-flash', env.GEMINI_API_KEY);
 }
 
 function geminiFlashLite(env: ProviderEnv): Provider {
@@ -232,18 +235,26 @@ function createWorkersAiProvider(ai: Ai, model: string): Provider {
     model,
     async complete(req: CompletionRequest): Promise<CompletionResponse> {
       const messages = [{ role: 'system', content: req.systemPrompt }, ...req.history];
-      // ai.run のモデル名はユニオン型だが動的に渡すため最小限のキャストでラップする
-      const run = ai.run as unknown as (
-        m: string,
-        opts: object,
-      ) => Promise<{ response?: string }>;
-      const resp = await run(model, {
+      // env.AI.run はメソッド。detach（const run = ai.run）して呼ぶと this を失い、SDK 内部の
+      // private field #options で "Cannot set properties of undefined" になる。必ず binding 経由で呼ぶ。
+      // モデル名はユニオン型だが動的に渡すため binding ごと最小限キャストする。
+      const aiBinding = ai as unknown as {
+        run(
+          model: string,
+          opts: object,
+        ): Promise<{
+          response?: string;
+          choices?: Array<{ message?: { content?: string } }>;
+        }>;
+      };
+      const resp = await aiBinding.run(model, {
         messages,
         max_tokens: req.maxTokens ?? 350,
         temperature: req.temperature ?? 0.85,
         stream: false,
       });
-      const text = (resp.response ?? '').trim();
+      // 新しめのモデルは OpenAI 形式 (choices[0].message.content)、旧来は { response } を返す。両対応。
+      const text = (resp.response ?? resp.choices?.[0]?.message?.content ?? '').trim();
       if (!text) {
         throw new ProviderError('workers-ai', 'Empty response', undefined, true);
       }
