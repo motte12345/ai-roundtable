@@ -26,7 +26,6 @@ not_found_handling = "single-page-application"
 # 環境変数（API キーは secrets で別途設定:
 #   wrangler secret put GEMINI_API_KEY
 #   wrangler secret put GROQ_API_KEY
-#   wrangler secret put CEREBRAS_API_KEY
 #   wrangler secret put MISTRAL_API_KEY  # ハイライト生成用
 #   wrangler secret put TURNSTILE_SECRET_KEY  # 議題候補投票の bot 対策
 #   wrangler secret put BLUESKY_IDENTIFIER     # Bluesky 本編配信: handle (例 roundtable.bsky.social) or DID

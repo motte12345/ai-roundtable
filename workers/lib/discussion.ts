@@ -51,7 +51,7 @@ export interface HostClosingContext {
 /**
  * 履歴を user メッセージ1本に統合。
  * - assistant ロールで他キャラ発言を渡すと役割崩壊が起きるため避ける
- * - Cerebras 8192 token 制限対応のため直近6発言のみ
+ * - context/トークン節約のため直近6発言のみ渡す（小型モデルの context 上限・TPM 対策）
  */
 function buildHistory(
   turns: PrevTurn[],

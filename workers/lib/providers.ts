@@ -42,7 +42,7 @@ export class ProviderError extends Error {
 }
 
 // =====================================================
-// OpenAI 互換クライアント (Groq, Cerebras 等)
+// OpenAI 互換クライアント (Groq 等)
 // =====================================================
 
 interface OpenAIConfig {
@@ -167,6 +167,7 @@ export interface ProviderEnv {
   GROQ_API_KEY?: string;
   CEREBRAS_API_KEY?: string;
   MISTRAL_API_KEY?: string;
+  AI?: Ai; // Cloudflare Workers AI binding（外部キー不要のプロバイダ）
 }
 
 interface ProviderAssignment {
@@ -221,14 +222,43 @@ function groqLlama8B(env: ProviderEnv): Provider {
   });
 }
 
-function cerebrasGptOss(env: ProviderEnv): Provider {
-  if (!env.CEREBRAS_API_KEY) throw new Error('CEREBRAS_API_KEY not set');
-  return createOpenAICompatibleProvider({
-    name: 'cerebras',
-    model: 'gpt-oss-120b',
-    endpoint: 'https://api.cerebras.ai/v1/chat/completions',
-    apiKey: env.CEREBRAS_API_KEY,
-  });
+/**
+ * Cloudflare Workers AI プロバイダ。env.AI.run() 経由で、外部 API キー不要・無料 neurons/日。
+ * neuron 枯渇や障害時は throw → completeWithFallback で次プロバイダに流れる（best-effort）。
+ */
+function createWorkersAiProvider(ai: Ai, model: string): Provider {
+  return {
+    name: 'workers-ai',
+    model,
+    async complete(req: CompletionRequest): Promise<CompletionResponse> {
+      const messages = [{ role: 'system', content: req.systemPrompt }, ...req.history];
+      // ai.run のモデル名はユニオン型だが動的に渡すため最小限のキャストでラップする
+      const run = ai.run as unknown as (
+        m: string,
+        opts: object,
+      ) => Promise<{ response?: string }>;
+      const resp = await run(model, {
+        messages,
+        max_tokens: req.maxTokens ?? 350,
+        temperature: req.temperature ?? 0.85,
+        stream: false,
+      });
+      const text = (resp.response ?? '').trim();
+      if (!text) {
+        throw new ProviderError('workers-ai', 'Empty response', undefined, true);
+      }
+      return { text, provider: 'workers-ai', model };
+    },
+  };
+}
+
+/**
+ * Workers AI の Llama 3.3 70B（fp8-fast）。Zen が使う Groq llama-3.3-70b-versatile と同クラス。
+ * Groq 70B の TPD ボトルネックを別インフラ・無料 neurons に逃がす目的。
+ */
+function workersAiLlama70B(env: ProviderEnv): Provider {
+  if (!env.AI) throw new Error('AI binding not set');
+  return createWorkersAiProvider(env.AI, '@cf/meta/llama-3.3-70b-instruct-fp8-fast');
 }
 
 export function getProviderAssignment(speaker: Speaker, env: ProviderEnv): ProviderAssignment {
@@ -239,7 +269,9 @@ export function getProviderAssignment(speaker: Speaker, env: ProviderEnv): Provi
       // Llama 4 Scout (別 TPD バケット) を primary に。fallback は実績のある 70B
       return { primary: groqLlama4Scout(env), fallback: groqLlama70B(env) };
     case 'zen':
-      return { primary: groqLlama70B(env), fallback: cerebrasGptOss(env) };
+      // 2026-06-25: Workers AI の Llama 3.3 70B（同クラス・無料neurons・別インフラ）を primary に
+      // して Groq 70B の TPD ボトルネックを解消。neuron 枯渇/障害時は実績ある Groq 70B に fallback。
+      return { primary: workersAiLlama70B(env), fallback: groqLlama70B(env) };
     case 'host':
       return { primary: geminiFlashLite(env), fallback: groqLlama8B(env) };
   }
