@@ -176,15 +176,10 @@ interface ProviderAssignment {
 }
 
 // Gemini は pinned版を使う（-latest は挙動が動くため）。thinkingBudget:0 受理を実 API で確認済み。
-// 2026-06-25: Optimist は一度 gemini-3.5-flash に上げたが無料枠で 503(high demand) が多発し
-// 毎回 groq 8B に fallback して劣化したため、実績ある gemini-2.5-flash に戻す。Host の
-// gemini-3.1-flash-lite とは別モデルにして、レート枠の分離と文体の多様性を保つ。
-// （3.5-flash の混雑が解消したら再検討）
-function geminiFlash(env: ProviderEnv): Provider {
-  if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
-  return createGeminiProvider('gemini-2.5-flash', env.GEMINI_API_KEY);
-}
-
+// 2026-06-25: Optimist/Host とも gemini-3.1-flash-lite に統一。無料枠の安定性が理由で、実測
+// （各5回）は flash-lite=5/5・2.5-flash=3/5・3.5-flash=0/5(全部503)。唯一安定して使えるのが
+// flash-lite。Optimist+Host 合計でも ~49 RPD で無料枠（~1000 RPD）に余裕。文体は system prompt
+// で差別化する（3.5-flash の混雑が解消したら Optimist を分離して多様性を戻すか再検討）。
 function geminiFlashLite(env: ProviderEnv): Provider {
   if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not set');
   return createGeminiProvider('gemini-3.1-flash-lite', env.GEMINI_API_KEY);
@@ -275,7 +270,7 @@ function workersAiLlama70B(env: ProviderEnv): Provider {
 export function getProviderAssignment(speaker: Speaker, env: ProviderEnv): ProviderAssignment {
   switch (speaker) {
     case 'optimist':
-      return { primary: geminiFlash(env), fallback: groqLlama8B(env) };
+      return { primary: geminiFlashLite(env), fallback: groqLlama8B(env) };
     case 'skeptic':
       // Llama 4 Scout (別 TPD バケット) を primary に。fallback は実績のある 70B
       return { primary: groqLlama4Scout(env), fallback: groqLlama70B(env) };
