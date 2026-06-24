@@ -34,6 +34,16 @@ const PDS = 'https://bsky.social';
 /** Bluesky の投稿上限（書記素 = grapheme cluster で 300） */
 const MAX_GRAPHEMES = 300;
 
+/** 分割時の1サブ投稿あたり本文 budget。prefix(~12) + counter " (n/n)"(~6, n<10) を 300 から
+ *  引いた安全値。実測 ~500字 → 最大2チャンクなので n は1桁、上限超過は起きない。 */
+const CHUNK_CONTENT_BUDGET = 280;
+
+/** 継続サブ投稿の先頭マーカー */
+const CONT_PREFIX = '（続き）';
+
+/** 文境界として優先する区切り文字（。！？等 → 読点の順で探す） */
+const SENTENCE_BREAKS = ['。', '！', '？', '\n', '．', '!', '?'];
+
 /** 話者プレフィックス。色で人格を瞬時に判別できるようにする */
 const SPEAKER_PREFIX: Record<string, string> = {
   host: '▣ Host:\n',
@@ -82,22 +92,82 @@ function buildLinkFacet(fullText: string, url: string): BskyFacet {
 }
 
 /**
- * 1発言を Bluesky 投稿テキスト + facets に整形する。
- * topicUrl を渡すと末尾にリンクを付ける（turn1 / turn11 のみ想定）。
+ * 本文を budget（書記素）以内のチャンクに分割する。
+ * できるだけ文境界（。！？→読点）で切る。budget の 50% 以降で最後に見つかった
+ * 区切りで切り、無ければ budget でハード分割する。
  */
-export function buildPostText(
+function splitContent(content: string, budget: number): string[] {
+  if (budget <= 0) throw new Error('splitContent: budget must be > 0');
+  const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+  const segs = [...seg.segment(content)].map((s) => s.segment);
+  if (segs.length <= budget) {
+    const single = content.trim();
+    return single.length > 0 ? [single] : [];
+  }
+
+  const chunks: string[] = [];
+  let i = 0;
+  while (i < segs.length) {
+    let end = Math.min(i + budget, segs.length);
+    if (end < segs.length) {
+      const window = segs.slice(i, end);
+      const minCut = Math.floor(window.length * 0.5);
+      let cut = -1;
+      for (let j = window.length - 1; j >= minCut; j--) {
+        if (SENTENCE_BREAKS.includes(window[j])) {
+          cut = j;
+          break;
+        }
+      }
+      if (cut === -1) {
+        for (let j = window.length - 1; j >= minCut; j--) {
+          if (window[j] === '、') {
+            cut = j;
+            break;
+          }
+        }
+      }
+      if (cut !== -1) end = i + cut + 1;
+    }
+    const piece = segs.slice(i, end).join('').trim();
+    if (piece.length > 0) chunks.push(piece);
+    i = end;
+  }
+  return chunks;
+}
+
+/**
+ * 1発言を Bluesky 投稿チャンク配列に整形する。長い発言は複数投稿に分割される
+ * （呼び出し側がスレッドとして連投する）。
+ * - topicUrl 付き（turn1/11 の短い Host 発言想定）: リンク付き単一投稿
+ * - topicUrl なし（Skeptic/Zen 等）: 上限超過分を文境界で分割。先頭は話者プレフィックス、
+ *   継続は `（続き）`、複数チャンク時は各末尾に ` (i/n)` を付ける
+ */
+export function buildPostChunks(
   speaker: string,
   content: string,
   topicUrl?: string,
-): { text: string; facets?: BskyFacet[] } {
+): Array<{ text: string; facets?: BskyFacet[] }> {
   const prefix = SPEAKER_PREFIX[speaker] ?? `${speaker}:\n`;
-  const urlSection = topicUrl ? `\n\n${topicUrl}` : '';
-  const available =
-    MAX_GRAPHEMES - countGraphemes(prefix) - countGraphemes(urlSection);
-  const trimmed = trimToGraphemes(content.trim(), available);
-  const text = prefix + trimmed + urlSection;
-  if (!topicUrl) return { text };
-  return { text, facets: [buildLinkFacet(text, topicUrl)] };
+  const body = content.trim();
+
+  // turn1/11: 短い Host 発言 + リンク。リンク付き単一投稿として扱う（実測 ≤226字で収まる）。
+  if (topicUrl) {
+    const urlSection = `\n\n${topicUrl}`;
+    const available =
+      MAX_GRAPHEMES - countGraphemes(prefix) - countGraphemes(urlSection);
+    const text = prefix + trimToGraphemes(body, available) + urlSection;
+    return [{ text, facets: [buildLinkFacet(text, topicUrl)] }];
+  }
+
+  // それ以外: 上限超過分を文境界で分割してスレッド連投する。
+  const pieces = splitContent(body, CHUNK_CONTENT_BUDGET);
+  const n = pieces.length;
+  return pieces.map((piece, i) => {
+    const head = i === 0 ? prefix : CONT_PREFIX;
+    const counter = n > 1 ? ` (${i + 1}/${n})` : '';
+    return { text: head + piece + counter };
+  });
 }
 
 // -------------------- AT Protocol HTTP --------------------

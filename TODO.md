@@ -31,8 +31,10 @@
 - [x] **secrets 投入** — `BLUESKY_IDENTIFIER` / `BLUESKY_APP_PASSWORD` を本番 Worker に設定済み
 - [x] **マイグレーション適用** — 0010 を local + remote に直接 execute で適用（`migrations apply` はこのDBの追跡と不整合のため不使用。KNOWLEDGE 参照）。remote の messages に bluesky_uri/cid 確認済み
 - [x] **本番デプロイ** — 2026-06-24 `npm run worker:deploy` 完了（Version ffca4473）。cron 稼働中
-- [ ] **初回スレッドの目視検証（要観察）** — デプロイ時 active だった #427 は turn1 が旧投稿のため Bluesky には出ない（skip）。**最初の実スレッドは #427 完走後に始まる次議題の turn1 から**（デプロイ from 約2.5h後）。出たらスレッド連結・リンク(facet)・プレフィックス・文字数・bot表示を確認。問題あれば `bluesky_enabled='0'` で即停止
-- [ ] **コミット** — 変更一式（bluesky.ts ほか）は未コミット。デプロイ済みなので早めにコミットする
+- [x] **初回投稿確認** — 2026-06-24、topic #428/#429 でスレッド投稿を確認。リンク(facet)・プレフィックス・bot 表示OK
+- [x] **長文切れ対策（分割連投）** — 発言が実測~500字で300書記素上限を超えチョップされていた → 文境界で分割しサブ投稿として連投する方式に変更（`buildPostChunks`/`splitContent`）。code-reviewer APPROVE、node実機で398字→2投稿(259/166)確認、デプロイ済み(Version 2718ee6e)
+- [ ] **分割連投の目視検証（要観察）** — 次に投稿される Skeptic/Zen ターンが2投稿に分かれ、`(1/2)(2/2)`・`（続き）`が付き、各投稿が切れずに繋がるか確認
+- [ ] **`bot` セルフラベル** — アカウントのプロフィールに付いているか確認（規約ベストプラクティス）
 
 ## 未実装の機能候補
 

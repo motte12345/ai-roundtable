@@ -15,7 +15,7 @@ import { generateSeoTitle } from './seo-title.js';
 import { buildSpeechText, generateAndStoreTts, type TtsEnv } from './tts.js';
 import { tryReserveTtsBudget } from './tts-budget.js';
 import { isDuplicateTitle, isThemeOverloaded } from './topic-similarity.js';
-import { createSession, postRecord, buildPostText, type BskyPostRef } from './bluesky.js';
+import { createSession, postRecord, buildPostChunks, type BskyPostRef } from './bluesky.js';
 
 /** 議題ページの公開 URL ベース（Bluesky 投稿のリンク用） */
 const TOPIC_URL_BASE = 'https://roundtable.simtool.dev/topic';
@@ -185,20 +185,33 @@ export async function advanceOneTurn(ctx: RunContext): Promise<TurnResult> {
           // URL は入口(turn1)とシェア起点(最終turn)のみ付ける
           const includeUrl = nextTurnNo === 1 || nextTurnNo === TOTAL_TURNS;
           const topicUrl = includeUrl ? `${TOPIC_URL_BASE}/${active.id}` : undefined;
-          const { text, facets } = buildPostText(result.speaker, result.content, topicUrl);
+          // 長い発言（Skeptic/Zen は実測~500字）は複数チャンクに分割し、サブ投稿として
+          // 連続 reply する。turn1 は必ず単一投稿（短い Host + リンク）なので root が一意。
+          const chunks = buildPostChunks(result.speaker, result.content, topicUrl);
           const session = await createSession(
             env.BLUESKY_IDENTIFIER,
             env.BLUESKY_APP_PASSWORD,
           );
-          const reply =
-            rootRef && parentRef ? { root: rootRef, parent: parentRef } : undefined;
-          const postRef = await postRecord(session, {
-            text,
-            facets,
-            createdAt: new Date(now * 1000).toISOString(),
-            reply,
-          });
-          await db.updateMessageBskyRef(insertedId, postRef.uri, postRef.cid);
+          const createdAt = new Date(now * 1000).toISOString();
+          let root = rootRef; // turn1 は null → 最初の投稿が root になる
+          let parent = parentRef; // turn1 は null
+          let lastRef: BskyPostRef | null = null;
+          for (const chunk of chunks) {
+            const reply = root && parent ? { root, parent } : undefined;
+            const ref = await postRecord(session, {
+              text: chunk.text,
+              facets: chunk.facets,
+              createdAt,
+              reply,
+            });
+            if (!root) root = ref; // turn1 の最初のサブ投稿をスレッド root に
+            parent = ref; // 各サブ投稿は直前のサブ投稿への reply
+            lastRef = ref;
+          }
+          // このターンの「最後のサブ投稿」を ref として保存（次ターンはここに reply する）
+          if (lastRef) {
+            await db.updateMessageBskyRef(insertedId, lastRef.uri, lastRef.cid);
+          }
         }
       }
     } catch (e) {
