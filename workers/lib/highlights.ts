@@ -1,15 +1,18 @@
 /**
  * 議論完了時に「議論のハイライト」3種を選定する。
- * 議論全文 (~2700 tokens) を渡すため、Groq Llama 3.3 70B の TPD を圧迫しないよう
- * Mistral Experiment tier (mistral-small-latest, 月1B tokens) を優先採用する。
- * Mistral 失敗時は Groq Llama 3.1 8B Instant に fallback。
+ * Mistral Experiment tier (mistral-small-latest) を優先、失敗時 Groq Llama 3.1 8B Instant に fallback。
  *
- * 出力は JSON: { sharpest, constructive, illuminating } の3点。
+ * 注意: 発言は実測 ~500字 × 11 あり全文だと Groq 8B の TPM 6000 を超えて 413 になるため、
+ * 各ターンを HIGHLIGHT_EXCERPT_LEN 文字に切り詰めて渡す（選定には冒頭抜粋で十分）。
+ * 出力は JSON: { sharpest, constructive, illuminating }（各 turn_no/reason、キー名厳守）。
  */
 import type { ProviderEnv } from './providers.js';
 
 const MISTRAL_ENDPOINT = 'https://api.mistral.ai/v1/chat/completions';
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+
+/** ハイライト選定に渡す1ターンあたりの抜粋長（TPM 超過対策） */
+const HIGHLIGHT_EXCERPT_LEN = 200;
 
 export interface HighlightItem {
   turn_no: number;
@@ -39,7 +42,11 @@ const SYSTEM_PROMPT = `あなたは AI 議論サイトの編集者です。
 - Host (turn 1, 11) は対象外。turn 2〜10 から選ぶ
 - 各カテゴリは別々のターンを選ぶ（同じターンを2つ以上に使わない）
 - 各 \`reason\` は 30〜50字で「なぜその発言が際立つか」を1文で
-- **出力は JSON のみ。マークダウンで囲まない**`;
+
+## 出力形式
+**キー名を厳守**し、次の JSON のみを返す（マークダウンで囲まない）。
+\`turn_no\` は 2〜10 の整数、\`reason\` は文字列:
+{"sharpest":{"turn_no":3,"reason":"..."},"constructive":{"turn_no":5,"reason":"..."},"illuminating":{"turn_no":7,"reason":"..."}}`;
 
 interface ResponseShape {
   sharpest?: HighlightItem;
@@ -49,9 +56,10 @@ interface ResponseShape {
 
 function validateHighlight(h: unknown, turnRange: Set<number>): HighlightItem | null {
   if (!h || typeof h !== 'object') return null;
-  const obj = h as Partial<HighlightItem>;
-  const turn = Number(obj.turn_no);
-  const reason = typeof obj.reason === 'string' ? obj.reason.trim() : '';
+  const rec = h as Record<string, unknown>;
+  // モデルが turn_no でなく turn を返すことがあるので両方受ける（防御的）
+  const turn = Number(rec.turn_no ?? rec.turn);
+  const reason = typeof rec.reason === 'string' ? rec.reason.trim() : '';
   if (!turnRange.has(turn) || reason.length === 0 || reason.length > 80) return null;
   return { turn_no: turn, reason };
 }
@@ -125,8 +133,14 @@ export async function generateHighlights(
   if (eligible.length < 3) return null;
   const turnRange = new Set(eligible.map((m) => m.turn_no));
 
+  // 各ターンを抜粋に切り詰める。発言は実測 ~500字あり、全文 × 11 だと小型モデルの
+  // TPM 上限（Groq llama-3.1-8b-instant は 6000 TPM）を超えて 413 になる。
+  // ハイライト選定にはどのターンが際立つか判別できれば十分なので冒頭抜粋で足りる。
   const transcript = messages
-    .map((m) => `[turn ${m.turn_no}][${m.speaker}] ${m.content}`)
+    .map(
+      (m) =>
+        `[turn ${m.turn_no}][${m.speaker}] ${Array.from(m.content).slice(0, HIGHLIGHT_EXCERPT_LEN).join('')}`,
+    )
     .join('\n\n');
 
   const userText = `議題: 「${topicTitle}」\n\n## 議論全文\n${transcript}\n\n## タスク\n上記の議論から sharpest / constructive / illuminating をそれぞれ別々のターンから選び、JSON で返してください。`;
@@ -141,7 +155,7 @@ export async function generateHighlights(
       systemPrompt: SYSTEM_PROMPT,
       userPrompt: userText,
       maxTokens: 500,
-      temperature: 0.5,
+      temperature: 0.3,
       label: 'mistral',
     });
   }
@@ -153,7 +167,7 @@ export async function generateHighlights(
       systemPrompt: SYSTEM_PROMPT,
       userPrompt: userText,
       maxTokens: 500,
-      temperature: 0.5,
+      temperature: 0.3,
       label: 'groq',
     });
   }

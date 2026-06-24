@@ -40,7 +40,9 @@
 ### モデル更新・要観察（2026-06-24）
 - [x] **Gemini 3.x へ更新** — Optimist=`gemini-3.5-flash` / Host=`gemini-3.1-flash-lite`（実API検証済、デプロイ Version 109b4513）
 - [ ] **3.x 移行後の品質観察** — 2-3議題ぶん、Optimist/Host の口調・字数遵守・thinking途切れ無しを確認。429（無料枠超過）が出ないかも監視
-- [ ] **【要調査】ハイライト全滅バグ** — 直近完了 #422〜429 が8件連続で `highlights IS NULL`（SEOタイトルは出ている）。ハイライトは Mistral→Groq8B fallback。Mistral キー失効か、生成/JSONパース失敗か、best-effort catch で握り潰されているか不明。本番ログ（`[highlights] error`）か backfill 再実行で切り分け。**Bluselyとは無関係の既存機能の劣化**
+- [x] **ハイライト全滅バグ修正** — 調査の結果 **0/410 件**（リリース以来一度も成功せず）。原因二重：① プロンプトがスキーマ未明示でモデルが `turn`（≠`turn_no`）を返し検証全滅 ② 全文投入で Groq 8B の TPM 6000 超過→413。修正＝プロンプトにJSON具体例＋各ターン200字truncate＋`turn_no??turn`両受け＋temp0.3。実API(Groq8B)で総合PASS確認、code-reviewer APPROVE、デプロイ Version 0b2d8711。詳細 KNOWLEDGE
+- [ ] **ハイライト反映確認（要観察）** — 0b2d8711 後に完了する議題で `highlights` が埋まるか確認（次の議題完了時）
+- [ ] **（任意）既存410件の backfill** — `npm run backfill:highlights -- --remote` で過去分も埋められるが **410件×35〜65秒＝約4〜7時間**＋外部API大量呼び出し。ライブcronと無料枠を食い合う恐れ（KNOWLEDGE 2026-05-09 の事故）。やるなら時間帯を選ぶ/件数を区切る。要ユーザー判断
 - [ ] **（任意）seo-title/host-memo も Gemini 3.x 化** — 現状 gemini-2.5-flash / 2.5-flash-lite のまま。上げるなら別途
 
 ## 未実装の機能候補
