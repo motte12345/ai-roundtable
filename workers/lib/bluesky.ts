@@ -38,9 +38,9 @@ const PDS = 'https://bsky.social';
  *  ※ API（createRecord）自体は ~3000 バイトまで受けるが、可読性のため 300 を目標にする。 */
 const MAX_LENGTH = 300;
 
-/** 分割時の1サブ投稿あたり本文 budget。prefix(~12) + counter " (n/n)"(~6, n<10) を 300 から
- *  引いた安全値。実測 ~500字 → 最大2チャンクなので n は1桁、上限超過は起きない。 */
-const CHUNK_CONTENT_BUDGET = 280;
+/** 分割時の1サブ投稿あたり本文 budget。最長 prefix（🟢 Optimist（楽観派）:\n ≒17）+
+ *  counter " (n/n)"(~6, n<10) を 300 から引いた安全値（17+270+6=293≤300）。 */
+const CHUNK_CONTENT_BUDGET = 270;
 
 /** 継続サブ投稿の先頭マーカー */
 const CONT_PREFIX = '（続き）';
@@ -48,12 +48,12 @@ const CONT_PREFIX = '（続き）';
 /** 文境界として優先する区切り文字（。！？等 → 読点の順で探す） */
 const SENTENCE_BREAKS = ['。', '！', '？', '\n', '．', '!', '?'];
 
-/** 話者プレフィックス。色で人格を瞬時に判別できるようにする */
+/** 話者プレフィックス。色＋英名＋日本語の立場で、誰のどんな立場の発言か一目で分かるようにする */
 const SPEAKER_PREFIX: Record<string, string> = {
-  host: '▣ Host:\n',
-  optimist: '🟢 Optimist:\n',
-  skeptic: '🔴 Skeptic:\n',
-  zen: '🟣 Zen:\n',
+  host: '▣ Host（司会）:\n',
+  optimist: '🟢 Optimist（楽観派）:\n',
+  skeptic: '🔴 Skeptic（懐疑派）:\n',
+  zen: '🟣 Zen（俯瞰派）:\n',
 };
 
 // -------------------- テキスト整形（純粋関数・単体テスト可能） --------------------
