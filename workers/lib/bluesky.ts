@@ -24,10 +24,14 @@ export interface BskySession {
   accessJwt: string;
 }
 
-/** app.bsky.richtext.facet（リンクをクリック可能にする） */
+/** app.bsky.richtext.facet（リンク・ハッシュタグをクリック/検索可能にする） */
 export interface BskyFacet {
   index: { byteStart: number; byteEnd: number };
-  features: Array<{ $type: string; uri: string }>;
+  // #link は uri、#tag は tag を持つ（型で取り違えを防ぐ）
+  features: Array<
+    | { $type: 'app.bsky.richtext.facet#link'; uri: string }
+    | { $type: 'app.bsky.richtext.facet#tag'; tag: string }
+  >;
 }
 
 /** デフォルト PDS。セルフホスト等を使う場合はここを切替 */
@@ -95,6 +99,32 @@ function buildLinkFacet(fullText: string, url: string): BskyFacet {
 }
 
 /**
+ * ハッシュタグ群の末尾セクション（`\n\n#tag1 #tag2 ...`）と、各タグの tag facet を組む。
+ * baseText（タグより前の確定テキスト）からの UTF-8 バイトオフセットを構築しながら実測する。
+ * tag facet の値は `#` を除いたタグ文字列、byte 範囲は `#tag`（# 込み）を指す。
+ */
+function buildTagSection(
+  baseText: string,
+  tags: string[],
+): { section: string; facets: BskyFacet[] } {
+  const encoder = new TextEncoder();
+  const facets: BskyFacet[] = [];
+  let section = '\n\n';
+  tags.forEach((tag, i) => {
+    if (i > 0) section += ' ';
+    const byteStart = encoder.encode(baseText + section).length;
+    const hashtag = `#${tag}`;
+    section += hashtag;
+    const byteEnd = byteStart + encoder.encode(hashtag).length;
+    facets.push({
+      index: { byteStart, byteEnd },
+      features: [{ $type: 'app.bsky.richtext.facet#tag', tag }],
+    });
+  });
+  return { section, facets };
+}
+
+/**
  * 本文を budget（コードポイント）以内のチャンクに分割する。
  * できるだけ文境界（。！？→読点）で切る。budget の 50% 以降で最後に見つかった
  * 区切りで切り、無ければ budget でハード分割する。
@@ -149,17 +179,27 @@ export function buildPostChunks(
   speaker: string,
   content: string,
   topicUrl?: string,
+  hashtags?: string[],
 ): Array<{ text: string; facets?: BskyFacet[] }> {
   const prefix = SPEAKER_PREFIX[speaker] ?? `${speaker}:\n`;
   const body = content.trim();
 
   // turn1/11: 短い Host 発言 + リンク。リンク付き単一投稿として扱う（実測 ≤226字で収まる）。
+  // turn1 のみ hashtags を末尾に付与（検索流入用、tag facet 付き）。
   if (topicUrl) {
     const urlSection = `\n\n${topicUrl}`;
+    const tags = hashtags?.filter((t) => t.length > 0) ?? [];
+    // 本文 budget は prefix + urlSection + （タグ込みの想定長）を 300 から引いた残り。
+    // タグセクションの実長はトリム後の本文に依存するので、先に本文を確定させてから組む。
+    const tagBudget = tags.length ? countCodepoints('\n\n' + tags.map((t) => `#${t}`).join(' ')) : 0;
     const available =
-      MAX_LENGTH - countCodepoints(prefix) - countCodepoints(urlSection);
-    const text = prefix + trimToLength(body, available) + urlSection;
-    return [{ text, facets: [buildLinkFacet(text, topicUrl)] }];
+      MAX_LENGTH - countCodepoints(prefix) - countCodepoints(urlSection) - tagBudget;
+    const base = prefix + trimToLength(body, available) + urlSection;
+    const { section, facets: tagFacets } = tags.length
+      ? buildTagSection(base, tags)
+      : { section: '', facets: [] };
+    const text = base + section;
+    return [{ text, facets: [buildLinkFacet(text, topicUrl), ...tagFacets] }];
   }
 
   // それ以外: 上限超過分を文境界で分割してスレッド連投する。

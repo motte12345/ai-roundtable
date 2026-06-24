@@ -25,6 +25,17 @@ import {
 /** 議題ページの公開 URL ベース（Bluesky 投稿のリンク用） */
 const TOPIC_URL_BASE = 'https://roundtable.simtool.dev/topic';
 
+/** Bluesky の最初の投稿(turn1)に付ける固定ハッシュタグ（検索流入用） */
+const BLUESKY_BASE_TAGS = ['AI', 'AI議論'];
+/** ジャンル別ハッシュタグ（turn1 に1つ追加。genre は topics.genre 値） */
+const BLUESKY_GENRE_TAG: Record<string, string> = {
+  tech: 'テクノロジー',
+  sf: 'SF',
+  ethics: '倫理',
+  philosophy: '哲学',
+  lifestyle: 'ライフスタイル',
+};
+
 /** Host closing 用コンテキストのサイズ */
 const RECENT_TITLES_LIMIT = 12;
 const PENDING_TITLES_LIMIT = 20;
@@ -189,9 +200,15 @@ export async function advanceOneTurn(ctx: RunContext): Promise<TurnResult> {
           // URL は入口(turn1)とシェア起点(最終turn)のみ付ける
           const includeUrl = nextTurnNo === 1 || nextTurnNo === TOTAL_TURNS;
           const topicUrl = includeUrl ? `${TOPIC_URL_BASE}/${active.id}` : undefined;
+          // ハッシュタグは最初の投稿(turn1)のみ。固定タグ + ジャンル別タグ。
+          const genreTag = active.genre ? BLUESKY_GENRE_TAG[active.genre] : undefined;
+          const hashtags =
+            nextTurnNo === 1
+              ? [...BLUESKY_BASE_TAGS, ...(genreTag ? [genreTag] : [])]
+              : undefined;
           // 長い発言（Skeptic/Zen は実測~500字）は複数チャンクに分割し、サブ投稿として
-          // 連続 reply する。turn1 は必ず単一投稿（短い Host + リンク）なので root が一意。
-          const chunks = buildPostChunks(result.speaker, result.content, topicUrl);
+          // 連続 reply する。turn1 は必ず単一投稿（短い Host + リンク + タグ）なので root が一意。
+          const chunks = buildPostChunks(result.speaker, result.content, topicUrl, hashtags);
           const session = await createSessionWithRetry(
             env.BLUESKY_IDENTIFIER,
             env.BLUESKY_APP_PASSWORD,
