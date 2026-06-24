@@ -15,7 +15,12 @@ import { generateSeoTitle } from './seo-title.js';
 import { buildSpeechText, generateAndStoreTts, type TtsEnv } from './tts.js';
 import { tryReserveTtsBudget } from './tts-budget.js';
 import { isDuplicateTitle, isThemeOverloaded } from './topic-similarity.js';
-import { createSession, postRecord, buildPostChunks, type BskyPostRef } from './bluesky.js';
+import {
+  createSessionWithRetry,
+  postRecordWithRetry,
+  buildPostChunks,
+  type BskyPostRef,
+} from './bluesky.js';
 
 /** 議題ページの公開 URL ベース（Bluesky 投稿のリンク用） */
 const TOPIC_URL_BASE = 'https://roundtable.simtool.dev/topic';
@@ -187,7 +192,7 @@ export async function advanceOneTurn(ctx: RunContext): Promise<TurnResult> {
           // 長い発言（Skeptic/Zen は実測~500字）は複数チャンクに分割し、サブ投稿として
           // 連続 reply する。turn1 は必ず単一投稿（短い Host + リンク）なので root が一意。
           const chunks = buildPostChunks(result.speaker, result.content, topicUrl);
-          const session = await createSession(
+          const session = await createSessionWithRetry(
             env.BLUESKY_IDENTIFIER,
             env.BLUESKY_APP_PASSWORD,
           );
@@ -197,7 +202,8 @@ export async function advanceOneTurn(ctx: RunContext): Promise<TurnResult> {
           let lastRef: BskyPostRef | null = null;
           for (const chunk of chunks) {
             const reply = root && parent ? { root, parent } : undefined;
-            const ref = await postRecord(session, {
+            // チャンク単位でリトライ（ターン全体の再試行は二重投稿になるため不可）
+            const ref = await postRecordWithRetry(session, {
               text: chunk.text,
               facets: chunk.facets,
               createdAt,

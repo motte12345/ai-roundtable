@@ -239,3 +239,44 @@ export async function postRecord(
   }
   return { uri: data.uri, cid: data.cid };
 }
+
+// -------------------- リトライ（一時的失敗対策） --------------------
+
+/** 失敗時に attempts 回まで線形バックオフで再試行する汎用ヘルパー。 */
+async function withRetry<T>(fn: () => Promise<T>, attempts: number, baseMs: number): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      const more = i < attempts - 1;
+      console.warn(`[bluesky] attempt ${i + 1}/${attempts} failed${more ? ', retrying' : ''}:`, e);
+      if (more) {
+        await new Promise((r) => setTimeout(r, baseMs * (i + 1)));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/** createSession を最大 attempts 回まで再試行。 */
+export function createSessionWithRetry(
+  identifier: string,
+  password: string,
+  attempts = 2,
+): Promise<BskySession> {
+  return withRetry(() => createSession(identifier, password), attempts, 800);
+}
+
+/**
+ * postRecord を最大 attempts 回まで再試行する。**チャンク単位で呼ぶこと**
+ * （ターン全体を再試行すると投稿済みチャンクが二重投稿になるため）。
+ */
+export function postRecordWithRetry(
+  session: BskySession,
+  opts: Parameters<typeof postRecord>[1],
+  attempts = 3,
+): Promise<BskyPostRef> {
+  return withRetry(() => postRecord(session, opts), attempts, 600);
+}

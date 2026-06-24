@@ -18,7 +18,8 @@
 
 ### Bluesky 投稿の堅牢化（2026-06-25）
 - [x] **スレッド停止バグ修正** — topic432 turn4 の単発失敗が parent=直前ターン固定のせいでカスケード停止していた。parent を「直近で投稿成功したターン」(`getLatestPostedBskyRefBefore`)に変更し単発失敗から自動復帰。診断は一時 `/api/_bskyprobe` で createSession/postRecord が正常なことを確認（撤去済）。デプロイ 065d5dbf
-- [ ] **復帰確認（要観察）** — topic432 の turn10 以降、または次議題で `bluesky_uri` が再び付くか確認
+- [x] **投稿失敗時のリトライ追加** — `createSessionWithRetry`/`postRecordWithRetry`（線形バックオフ、チャンク単位）。一時的失敗を吸収。デプロイ 9dec206b。code-reviewer APPROVE
+- [ ] **復帰確認（要観察）** — 次議題（turn1から）で `bluesky_uri` が全ターン付くか・歯抜けが起きないか確認。※topic432 は埋め戻ししない（ユーザー判断、消去済み）
 
 
 ### Bluesky 本編配信（着手 2026-06-24、SPEC §8 参照）
