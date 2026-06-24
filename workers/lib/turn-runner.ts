@@ -15,6 +15,10 @@ import { generateSeoTitle } from './seo-title.js';
 import { buildSpeechText, generateAndStoreTts, type TtsEnv } from './tts.js';
 import { tryReserveTtsBudget } from './tts-budget.js';
 import { isDuplicateTitle, isThemeOverloaded } from './topic-similarity.js';
+import { createSession, postRecord, buildPostText, type BskyPostRef } from './bluesky.js';
+
+/** 議題ページの公開 URL ベース（Bluesky 投稿のリンク用） */
+const TOPIC_URL_BASE = 'https://roundtable.simtool.dev/topic';
 
 /** Host closing 用コンテキストのサイズ */
 const RECENT_TITLES_LIMIT = 12;
@@ -25,11 +29,16 @@ interface NotifyEnv {
   LINE_USER_ID?: string;
 }
 
+interface BlueskyEnv {
+  BLUESKY_IDENTIFIER?: string;
+  BLUESKY_APP_PASSWORD?: string;
+}
+
 interface RunContext {
   db: DB;
   // env は ProviderEnv（LLM プロバイダ）+ NotifyEnv（LINE）+ TtsEnv（AI/R2、optional）
-  // TtsEnv が無い場合は音声生成スキップ
-  env: ProviderEnv & NotifyEnv & Partial<TtsEnv>;
+  // + BlueskyEnv（本編配信、optional）。各 optional 機能は env が無ければスキップ
+  env: ProviderEnv & NotifyEnv & Partial<TtsEnv> & BlueskyEnv;
   now: number;
 }
 
@@ -141,6 +150,61 @@ export async function advanceOneTurn(ctx: RunContext): Promise<TurnResult> {
 
   await db.incrementTopicTurn(active.id, nextTurnNo);
   await db.setMeta('last_cron_run_at', String(now), now);
+
+  // Bluesky 本編配信。各ターンを「自分へのリプライ＝自己スレッド」として連投する。
+  // best-effort: ここの例外（getMeta 含む）は全て握り潰し、議論ターン進行には波及させない。
+  //   bluesky_enabled='0' で停止可。
+  // 冪等性: addMessage の UNIQUE 制約に勝った instance だけがここに来る + 投稿済みは
+  //   bluesky_uri で判定されるため、cron 二重発火でも二重投稿しない。
+  // 既知の失敗モード: postRecord 成功 → updateMessageBskyRef 完了前に Worker がクラッシュした
+  //   場合、その投稿は Bluesky 上に存在するが bluesky_uri は NULL のまま残る。次ターンは
+  //   root/parent 欠落でスキップされ、スレッドはそのターンで途中終了する（best-effort 許容）。
+  if (env.BLUESKY_IDENTIFIER && env.BLUESKY_APP_PASSWORD) {
+    try {
+      if ((await db.getMeta('bluesky_enabled')) === '0') {
+        console.log('[bluesky] disabled via meta flag, skip');
+      } else {
+        let rootRef: BskyPostRef | null = null;
+        let parentRef: BskyPostRef | null = null;
+        let canPost = true;
+
+        // turn2 以降は root(turn1) と parent(turn N-1) の参照が揃って初めて投稿できる。
+        // turn1 が未投稿（root欠落）なら以降のスレッドは作らない（orphan reply を散らさない）。
+        if (nextTurnNo > 1) {
+          rootRef = await db.getMessageBskyRef(active.id, 1);
+          parentRef = await db.getMessageBskyRef(active.id, nextTurnNo - 1);
+          if (!rootRef || !parentRef) {
+            console.log(
+              `[bluesky] missing thread ref (root=${!!rootRef} parent=${!!parentRef}) topic ${active.id} turn ${nextTurnNo}, skip`,
+            );
+            canPost = false;
+          }
+        }
+
+        if (canPost) {
+          // URL は入口(turn1)とシェア起点(最終turn)のみ付ける
+          const includeUrl = nextTurnNo === 1 || nextTurnNo === TOTAL_TURNS;
+          const topicUrl = includeUrl ? `${TOPIC_URL_BASE}/${active.id}` : undefined;
+          const { text, facets } = buildPostText(result.speaker, result.content, topicUrl);
+          const session = await createSession(
+            env.BLUESKY_IDENTIFIER,
+            env.BLUESKY_APP_PASSWORD,
+          );
+          const reply =
+            rootRef && parentRef ? { root: rootRef, parent: parentRef } : undefined;
+          const postRef = await postRecord(session, {
+            text,
+            facets,
+            createdAt: new Date(now * 1000).toISOString(),
+            reply,
+          });
+          await db.updateMessageBskyRef(insertedId, postRef.uri, postRef.cid);
+        }
+      }
+    } catch (e) {
+      console.warn('[bluesky] error', e);
+    }
+  }
 
   // 音声生成（Workers AI MeloTTS）。失敗してもターン進行は止めない
   // 日次予算（デフォルト 8K neurons = 10K 無料枠の 80%）を超えたらスキップ

@@ -14,6 +14,26 @@
 - [ ] Google Search Console プロパティ追加 + sitemap 送信
 - [ ] AdSense 申請（トラフィック様子見後に判断）
 
+## 進行中
+
+### Bluesky 本編配信（着手 2026-06-24、SPEC §8 参照）
+単一アカ・自己スレッド連投で、議論を毎ターン Bluesky に流す。集客のX案とは別系統（本編配信）。
+**実装完了・レビュー済み（tsc通過）。残りはユーザー作業（アカウント/secret）＋実機検証のみ。**
+- [x] **設計確定** — Backend Architect が詰めた（messages列追加方式・facets・冪等性・フック点）
+- [x] **`workers/lib/bluesky.ts` 実装** — createSession / buildPostText / postRecord / buildLinkFacet。grapheme(Intl.Segmenter)で300制限トリム、facetでURL付与
+- [x] **スレッド参照の永続化** — `0010_add_bluesky_refs.sql`（messages に bluesky_uri/bluesky_cid 列）+ db.ts に getMessageBskyRef/updateMessageBskyRef
+- [x] **turn-runner.ts への統合** — incrementTopicTurn 直後に best-effort 投稿（getMeta含め try で囲い議論を止めない）
+- [x] **`bluesky_enabled` メタフラグ** — 再デプロイなし停止（wrangler.toml にSQLコマンド記載）
+- [x] **話者プレフィックス整形** — `▣ Host:` / `🟢 Optimist:` / `🔴 Skeptic:` / `🟣 Zen:`
+- [x] **Env 型 + wrangler.toml コメント** — BLUESKY_IDENTIFIER / BLUESKY_APP_PASSWORD
+- [x] **レビュー** — code-reviewer（mutation等の指摘を反映済み）+ security-reviewer（secret漏洩なし・SQLバインド済み・SSRFなしを確認、対応不要）
+- [x] **Bluesky アカウント準備** — アカウント作成済み（app password 発行・bot ラベルはユーザー確認）
+- [x] **secrets 投入** — `BLUESKY_IDENTIFIER` / `BLUESKY_APP_PASSWORD` を本番 Worker に設定済み
+- [x] **マイグレーション適用** — 0010 を local + remote に直接 execute で適用（`migrations apply` はこのDBの追跡と不整合のため不使用。KNOWLEDGE 参照）。remote の messages に bluesky_uri/cid 確認済み
+- [x] **本番デプロイ** — 2026-06-24 `npm run worker:deploy` 完了（Version ffca4473）。cron 稼働中
+- [ ] **初回スレッドの目視検証（要観察）** — デプロイ時 active だった #427 は turn1 が旧投稿のため Bluesky には出ない（skip）。**最初の実スレッドは #427 完走後に始まる次議題の turn1 から**（デプロイ from 約2.5h後）。出たらスレッド連結・リンク(facet)・プレフィックス・文字数・bot表示を確認。問題あれば `bluesky_enabled='0'` で即停止
+- [ ] **コミット** — 変更一式（bluesky.ts ほか）は未コミット。デプロイ済みなので早めにコミットする
+
 ## 未実装の機能候補
 
 ### 高優先（実装済の延長で効くもの）

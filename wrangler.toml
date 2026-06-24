@@ -29,7 +29,11 @@ not_found_handling = "single-page-application"
 #   wrangler secret put CEREBRAS_API_KEY
 #   wrangler secret put MISTRAL_API_KEY  # ハイライト生成用
 #   wrangler secret put TURNSTILE_SECRET_KEY  # 議題候補投票の bot 対策
+#   wrangler secret put BLUESKY_IDENTIFIER     # Bluesky 本編配信: handle (例 roundtable.bsky.social) or DID
+#   wrangler secret put BLUESKY_APP_PASSWORD   # Bluesky app password（通常PWではない）
 # )
+# Bluesky 投稿の緊急停止（再デプロイ不要）:
+#   wrangler d1 execute ai-roundtable --remote --command "INSERT OR REPLACE INTO meta(key,value,updated_at) VALUES('bluesky_enabled','0',strftime('%s','now'))"
 # Workers AI (議題完了時に各発言の音声を MeloTTS で生成)
 [ai]
 binding = "AI"

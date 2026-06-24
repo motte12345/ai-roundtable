@@ -29,6 +29,8 @@ export interface Env {
   TURNSTILE_SECRET_KEY?: string;
   LINE_CHANNEL_TOKEN?: string;
   LINE_USER_ID?: string;
+  BLUESKY_IDENTIFIER?: string;
+  BLUESKY_APP_PASSWORD?: string;
   ENVIRONMENT?: string;
 }
 

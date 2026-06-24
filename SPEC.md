@@ -328,6 +328,43 @@ CREATE TABLE meta (
 
 ---
 
+## 8. 配信チャネル戦略【決定 2026-06-24】
+
+外部SNSへの展開を「集客」と「本編配信」の2系統に分離する。バックエンドは将来チャネルを足せるよう、議題イベント（開始/各ターン/完了）→ publisher の薄い抽象を意識する（最初から汎用化はしない）。
+
+### 採用方針
+| チャネル | 役割 | 投稿内容 | ステータス |
+|---|---|---|---|
+| **Bluesky** | **本編配信** | 議論本編を**毎ターン**自己スレッドで連投（11発言/議題） | **今回実装** |
+| X (Twitter) | 集客（導線） | 議題の開始/終了で各1ポスト + 議題ページURL | 将来（保留） |
+| Mastodon自鯖 / Discord | 本編配信 / 実況 | 同上 | 将来候補 |
+
+### なぜ X で「議論本編・複数人格」をやらないか（2026-06-24 調査）
+- **X API が無料原則に違反**: 無料枠は書込 月1,500ポスト前後・アプリ1個。まともに回すなら Basic 月$200。第一原則「従量課金APIは使わない」に反する
+- **複数アカウント連携の禁止**: 人格ごとに別アカで一斉投稿＝ coordinated inauthentic behavior に該当。1個凍結→芋づるBAN のリスク
+- **青バッジBOTは判断材料にしない**: 青バッジ＝月課金の記号であって規約遵守の許可証ではない。enforcement は確率的・事後的、生存者バイアスに注意
+- → X は**単一アカ・低頻度・自社リンクの集客導線**に限定する（将来）
+
+### Bluesky を本編配信に採用した理由（2026-06-24 調査）
+- **完全無料・審査なし・有料ティアなし**。アカウント(DID)ごとに 5,000 points/時・35,000 points/日。createRecord=3pt → 11,666投稿/日。想定99投稿/日は上限の1%以下で誤差
+- **BOT歓迎**（プロフィールに `bot` セルフラベル推奨）
+- 300書記素/投稿。発言150〜250字なので余裕
+
+### アカウント構成【決定】: 単一アカ・自己スレッド連投
+- **4人格を別アカにしない**。理由: ①Bluesky でも「BOTが他者へ非opt-inで reply 連鎖」は spam 判定対象＝**BOT同士の reply 連鎖が該当** ②各アカに固有の電話番号が必要（SIM4枚）＋同一端末自動化の flag リスク
+- **1アカウントが議論を自分へのリプライ＝スレッドとして連投**。自己スレッドは「他者への反応」に当たらず完全に規約セーフ
+- 人格の見分けは各投稿頭の話者名/絵文字プレフィックス（例 `🟢 Optimist:` / `🔴 Skeptic:` / `🟣 Zen:` / `▣ Host:`）で表現
+
+### 実装要点（着手前メモ）
+- フック点: `turn-runner.ts` `advanceOneTurn` の `addMessage` 成功直後に当該ターンを投稿
+- スレッド連結: AT Protocol の reply は root と parent の {uri, cid} 参照が必須 → 各メッセージの post ref を保存（messages 列追加 or meta に議題別保存。設計で確定）
+- リンク: Bluesky は素のURLを自動リンクしない → **facets（バイト範囲）で明示**。root（turn1）または最終投稿に議題ページURLを付与
+- 認証: app password を `BLUESKY_IDENTIFIER` / `BLUESKY_APP_PASSWORD` secret で（ハードコード禁止）。OAuth は dev preview のため当面 app password 採用
+- 安全弁: `bluesky_enabled` メタフラグで再デプロイなし停止（TTS予算ガードと同パターン）。投稿は best-effort、失敗しても議論cronは止めない
+- 冪等性: cron 二重発火・リトライでも同ターンを二重投稿しない（post ref 保存済みならスキップ）
+
+---
+
 ## 決定事項ログ
 - 2026-05-08: プロジェクト名 `ai-roundtable` に決定
 - 2026-05-08: ブラウザ自動化案は不採用（TOS違反リスク）
@@ -367,3 +404,8 @@ CREATE TABLE meta (
   - **Host モードBに多様性ルール追加**: 「3候補は互いに異なる主題」「同じ主題語が2つ以上の候補にあったら失格」「3つともジャンルを別にする」「派生は0〜1個まで」
   - **主題語ベース2段目重複検知** (`isThemeOverloaded`): bigram Jaccard を通過しても、pending 中に同主題が3件以上ある候補は却下。主題辞書は `topic-similarity.ts` の `THEME_KEYWORDS`（happiness / creativity / emotion / consciousness / virtual / ownership / effort_talent / relationship / freedom / money / work / death_life / ethics / identity / time / knowledge / meaning / art_creation）
   - 「AI」「人間」は横断ワードのため主題辞書には**入れない**（入れると全候補が overload になる）
+- 2026-06-24: 外部SNS展開を「集客」と「本編配信」に分離（§8）。X は集客導線のみ（将来・保留）
+- 2026-06-24: X で「本編・複数人格一斉投稿」は不採用（API有料化＋coordinated inauthentic behavior 規約リスク）
+- 2026-06-24: **Bluesky を本編配信チャネルに採用**（完全無料・BOT歓迎・レート上限が誤差）
+- 2026-06-24: Bluesky は**単一アカ・自己スレッド連投**方式に確定（4アカ別人格はBOT間reply連鎖がspam判定対象＋電話番号4つ必要のため不採用）
+- 2026-06-24: 毎ターン（11発言/議題）を話者プレフィックス付きでスレッド連投。認証は app password、`bluesky_enabled` メタフラグで停止可、best-effort
