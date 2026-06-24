@@ -6,7 +6,9 @@
  *
  * - 認証は app password（OAuth は使わない）。createSession を毎回呼ぶ（JWT はキャッシュしない）。
  * - best-effort 前提。呼び出し側（turn-runner）が try/catch で握り潰す。
- * - Workers ランタイム互換（fetch / Intl.Segmenter / TextEncoder のみ使用）。
+ * - Workers ランタイム互換（fetch / TextEncoder のみ使用）。
+ *   ※ 文字数カウントは Intl.Segmenter ではなく Array.from（コードポイント）を使う。
+ *     Segmenter は Workers 実機で grapheme を正しく数えなかった（countCodepoints 参照）。
  *
  * 参照: https://docs.bsky.app/docs/advanced-guides/posts
  */
@@ -31,8 +33,10 @@ export interface BskyFacet {
 /** デフォルト PDS。セルフホスト等を使う場合はここを切替 */
 const PDS = 'https://bsky.social';
 
-/** Bluesky の投稿上限（書記素 = grapheme cluster で 300） */
-const MAX_GRAPHEMES = 300;
+/** 1投稿あたりの目標長（コードポイント）。Bluesky 公式の compose 上限が 300 grapheme で、
+ *  超えると公式アプリが "Show more" で表示クリップするため、それ未満に収める。
+ *  ※ API（createRecord）自体は ~3000 バイトまで受けるが、可読性のため 300 を目標にする。 */
+const MAX_LENGTH = 300;
 
 /** 分割時の1サブ投稿あたり本文 budget。prefix(~12) + counter " (n/n)"(~6, n<10) を 300 から
  *  引いた安全値。実測 ~500字 → 最大2チャンクなので n は1桁、上限超過は起きない。 */
@@ -55,24 +59,23 @@ const SPEAKER_PREFIX: Record<string, string> = {
 // -------------------- テキスト整形（純粋関数・単体テスト可能） --------------------
 
 /**
- * grapheme（書記素クラスタ）数を数える。
- * 絵文字・結合文字を1文字として扱うため Intl.Segmenter を使う。
- * Segmenter はインスタンス生成コストを避けるため呼び出しごとに作る（頻度は ≤1/15分）。
+ * コードポイント数で長さを数える。
+ * NOTE: 当初 Intl.Segmenter(grapheme) を使ったが、Cloudflare Workers 上では
+ * grapheme 境界データが不完全で実測の約半分しか数えず、trim/split が効かなかった
+ * （Node ローカルでは正常 = 公式と実機の乖離）。日本語＋単一コードポイント絵文字
+ * （🟢▣等）が対象なので、コードポイント数 ≒ grapheme 数で十分かつ移植性が高い。
+ * Array.from はサロゲートペアをコードポイント単位で1要素にまとめる。
  */
-function countGraphemes(text: string): number {
-  // ロケールは grapheme 境界に影響しない（word/sentence のみロケール依存）ため undefined
-  const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-  return [...seg.segment(text)].length;
+function countCodepoints(text: string): number {
+  return Array.from(text).length;
 }
 
-/** grapheme 数で末尾を切り詰める（超過時のみ末尾に「…」を付ける） */
-function trimToGraphemes(text: string, max: number): string {
+/** コードポイント数で末尾を切り詰める（超過時のみ末尾に「…」を付ける） */
+function trimToLength(text: string, max: number): string {
   if (max <= 0) return '';
-  // ロケールは grapheme 境界に影響しない（word/sentence のみロケール依存）ため undefined
-  const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-  const segments = [...seg.segment(text)].map((s) => s.segment);
-  if (segments.length <= max) return text;
-  return segments.slice(0, max - 1).join('') + '…';
+  const cps = Array.from(text);
+  if (cps.length <= max) return text;
+  return cps.slice(0, max - 1).join('') + '…';
 }
 
 /**
@@ -92,14 +95,13 @@ function buildLinkFacet(fullText: string, url: string): BskyFacet {
 }
 
 /**
- * 本文を budget（書記素）以内のチャンクに分割する。
+ * 本文を budget（コードポイント）以内のチャンクに分割する。
  * できるだけ文境界（。！？→読点）で切る。budget の 50% 以降で最後に見つかった
  * 区切りで切り、無ければ budget でハード分割する。
  */
 function splitContent(content: string, budget: number): string[] {
   if (budget <= 0) throw new Error('splitContent: budget must be > 0');
-  const seg = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
-  const segs = [...seg.segment(content)].map((s) => s.segment);
+  const segs = Array.from(content);
   if (segs.length <= budget) {
     const single = content.trim();
     return single.length > 0 ? [single] : [];
@@ -155,8 +157,8 @@ export function buildPostChunks(
   if (topicUrl) {
     const urlSection = `\n\n${topicUrl}`;
     const available =
-      MAX_GRAPHEMES - countGraphemes(prefix) - countGraphemes(urlSection);
-    const text = prefix + trimToGraphemes(body, available) + urlSection;
+      MAX_LENGTH - countCodepoints(prefix) - countCodepoints(urlSection);
+    const text = prefix + trimToLength(body, available) + urlSection;
     return [{ text, facets: [buildLinkFacet(text, topicUrl)] }];
   }
 
