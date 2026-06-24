@@ -37,6 +37,12 @@
 - [ ] **修正後の目視検証（要観察）** — b508f9e3 反映後に投稿される Skeptic/Zen ターンが ≤300字×2投稿に正しく分かれ、`(1/2)(2/2)`・`（続き）`が付き繋がるか確認（現 thread #429 は途中からこの挙動に切替わる混在）
 - [ ] **`bot` セルフラベル** — アカウントのプロフィールに付いているか確認（規約ベストプラクティス）
 
+### Workers AI 導入（2026-06-25）
+- [x] **Cloudflare Workers AI をプロバイダ追加** — `createWorkersAiProvider`（`env.AI.run()`、外部キー不要）。Zen primary を `@cf/meta/llama-3.3-70b-instruct-fp8-fast` に、Groq 70B を fallback に。Groq 70B の TPD ボトルネック解消狙い。code-reviewer APPROVE、デプロイ Version a2976185、コミット f3233de
+- [ ] **【要確認】Zen が実際に Workers AI で生成されるか** — 次の Zen ターン（議題432 turn4 など）後に確認：`SELECT turn_no,provider,model,length(content) FROM messages WHERE topic_id=432 AND speaker='zen'`。provider が `workers-ai` なら成功＝ボトルネック解消。`groq` なら fallback 動作（Workers AI 失敗）→ 原因調査（neuron枯渇/権限/レスポンス形）。日本語品質も content で目視
+- [ ] **【要確認】neuron 消費** — Workers AI 無料枠 10k neurons/日。Zen ~32 RPD で収まるか。枯渇すると Groq に fallback（無害だが解消効果が薄れる）。`/api/tts-status` 的な可視化や neuron budget guard 追加は効果を見てから判断
+- [ ] **【軽微バグ】議題タイトルにジャンルタグ混入** — 議題432 のタイトルが「AIとの「対話」で自己理解を深めるか **[{tech}]**」。Host closing の次議題パースで `[genre]` 表記がタイトルに残るケースがある（`extractNextTopicProposals` の正規表現 or genre 抽出漏れ）。要調査・別件
+
 ### モデル更新・要観察（2026-06-24）
 - [x] **Gemini 3.x へ更新** — Optimist=`gemini-3.5-flash` / Host=`gemini-3.1-flash-lite`（実API検証済、デプロイ Version 109b4513）
 - [ ] **3.x 移行後の品質観察** — 2-3議題ぶん、Optimist/Host の口調・字数遵守・thinking途切れ無しを確認。429（無料枠超過）が出ないかも監視

@@ -24,7 +24,7 @@
 |---|---|---|---|---|
 | `optimist` | Optimist | 可能性を広げる、肯定的 | Gemini 3.5 Flash（2026-06-24更新） | Groq Llama 3.1 8B Instant |
 | `skeptic` | Skeptic | 前提を疑う、反論担当 | Groq Llama 3.3 70B | Cerebras gpt-oss-120b（fallback専用） |
-| `zen` | Zen | 両者を整理、メタ視点 | Groq Llama 3.3 70B | Cerebras gpt-oss-120b（fallback専用） |
+| `zen` | Zen | 両者を整理、メタ視点 | Workers AI Llama 3.3 70B fp8-fast（2026-06-25更新） | Groq Llama 3.3 70B |
 | `host` | Host | 議題提示・まとめ・次議題提案 | Gemini 3.1 Flash-Lite（2026-06-24更新） | Groq Llama 3.1 8B Instant |
 
 **プロバイダ採用方針（2026-05-08 調査結果）**:
@@ -410,3 +410,4 @@ CREATE TABLE meta (
 - 2026-06-24: Bluesky は**単一アカ・自己スレッド連投**方式に確定（4アカ別人格はBOT間reply連鎖がspam判定対象＋電話番号4つ必要のため不採用）
 - 2026-06-24: 毎ターン（11発言/議題）を話者プレフィックス付きでスレッド連投。認証は app password、`bluesky_enabled` メタフラグで停止可、best-effort
 - 2026-06-24: Gemini が 2.5→3.x 世代更新。**Optimist=`gemini-3.5-flash` / Host=`gemini-3.1-flash-lite`** に更新（実 API で無料応答・`thinkingBudget:0`受理・出力品質/字数を確認）。fallback は据え置き。Skeptic/Zen(Groq)・Cerebras は上位互換なく据え置き。pinned版採用（`-latest`不使用）。seo-title/host-memo は当面 2.5 のまま
+- 2026-06-25: **Cloudflare Workers AI をプロバイダに追加**（`env.AI` binding は TTS で配線済・外部キー不要・無料 neurons/日）。**Zen の primary を `@cf/meta/llama-3.3-70b-instruct-fp8-fast`**（Zen が使っていた Groq の Llama 3.3 70B と同クラス）に移し、Groq 70B を fallback に降格 → **Groq Llama 3.3 70B の TPD ボトルネック解消**（Skeptic fallback と共用だった）。neuron 枯渇/障害時は Groq 70B に自動 fallback（best-effort）。Cerebras gpt-oss は日本語破綻のため不使用化（コードから削除）
