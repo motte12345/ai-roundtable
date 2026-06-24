@@ -32,8 +32,9 @@
 - [x] **マイグレーション適用** — 0010 を local + remote に直接 execute で適用（`migrations apply` はこのDBの追跡と不整合のため不使用。KNOWLEDGE 参照）。remote の messages に bluesky_uri/cid 確認済み
 - [x] **本番デプロイ** — 2026-06-24 `npm run worker:deploy` 完了（Version ffca4473）。cron 稼働中
 - [x] **初回投稿確認** — 2026-06-24、topic #428/#429 でスレッド投稿を確認。リンク(facet)・プレフィックス・bot 表示OK
-- [x] **長文切れ対策（分割連投）** — 発言が実測~500字で300書記素上限を超えチョップされていた → 文境界で分割しサブ投稿として連投する方式に変更（`buildPostChunks`/`splitContent`）。code-reviewer APPROVE、node実機で398字→2投稿(259/166)確認、デプロイ済み(Version 2718ee6e)
-- [ ] **分割連投の目視検証（要観察）** — 次に投稿される Skeptic/Zen ターンが2投稿に分かれ、`(1/2)(2/2)`・`（続き）`が付き、各投稿が切れずに繋がるか確認
+- [x] **長文切れ対策（分割連投）** — 発言が実測~500字で長すぎた → 文境界で分割しサブ投稿として連投（`buildPostChunks`/`splitContent`）
+- [x] **分割が効かないバグ修正** — `Intl.Segmenter` が Workers 実機でグラフェムを約半分しか数えず、trim/split が無効化されていた（本番feed調査で発覚：05:30〜09:00 の投稿が全部500字級フル長）。`Array.from`（コードポイント数）に置換。code-reviewer APPROVE、node実機で384字→2投稿(295/116)確認、デプロイ済み(Version b508f9e3)。※Bluesky の300は API ハード上限ではなく公式アプリの表示クリップ閾値と判明（KNOWLEDGE 参照）
+- [ ] **修正後の目視検証（要観察）** — b508f9e3 反映後に投稿される Skeptic/Zen ターンが ≤300字×2投稿に正しく分かれ、`(1/2)(2/2)`・`（続き）`が付き繋がるか確認（現 thread #429 は途中からこの挙動に切替わる混在）
 - [ ] **`bot` セルフラベル** — アカウントのプロフィールに付いているか確認（規約ベストプラクティス）
 
 ## 未実装の機能候補
