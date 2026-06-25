@@ -42,9 +42,9 @@ const PDS = 'https://bsky.social';
  *  ※ API（createRecord）自体は ~3000 バイトまで受けるが、可読性のため 300 を目標にする。 */
 const MAX_LENGTH = 300;
 
-/** 分割時の1サブ投稿あたり本文 budget。最長 prefix（🟢 Optimist（楽観派）:\n ≒17）+
- *  counter " (n/n)"(~6, n<10) を 300 から引いた安全値（17+270+6=293≤300）。 */
-const CHUNK_CONTENT_BUDGET = 270;
+/** 分割時の1サブ投稿あたり本文 budget。最長 prefix（話者ラベル≤15 + ｜ + モデル名≤17 + :\n ≒35）
+ *  + counter " (n/n)"(~6, n<10) を 300 から引いた安全値（35+255+6=296≤300）。 */
+const CHUNK_CONTENT_BUDGET = 255;
 
 /** 継続サブ投稿の先頭マーカー */
 const CONT_PREFIX = '（続き）';
@@ -52,13 +52,34 @@ const CONT_PREFIX = '（続き）';
 /** 文境界として優先する区切り文字（。！？等 → 読点の順で探す） */
 const SENTENCE_BREAKS = ['。', '！', '？', '\n', '．', '!', '?'];
 
-/** 話者プレフィックス。色＋英名＋日本語の立場で、誰のどんな立場の発言か一目で分かるようにする */
-const SPEAKER_PREFIX: Record<string, string> = {
-  host: '▣ Host（司会）:\n',
-  optimist: '🟢 Optimist（楽観派）:\n',
-  skeptic: '🔴 Skeptic（懐疑派）:\n',
-  zen: '🟣 Zen（俯瞰派）:\n',
+/** 話者ラベル。色＋英名＋日本語の立場。モデル名と `:\n` は buildPostChunks で付与する */
+const SPEAKER_LABEL: Record<string, string> = {
+  host: '▣ Host（司会）',
+  optimist: '🟢 Optimist（楽観派）',
+  skeptic: '🔴 Skeptic（懐疑派）',
+  zen: '🟣 Zen（俯瞰派）',
 };
+
+/**
+ * モデル ID を投稿用の簡易表示名にする（例: gemini-3.1-flash-lite → "Gemini Flash-Lite",
+ * @cf/meta/llama-3.3-70b-instruct-fp8-fast → "Llama 3.3 70B"）。
+ */
+export function shortModelLabel(model: string): string {
+  const m = model.toLowerCase();
+  if (m.includes('gemini')) {
+    if (m.includes('flash-lite')) return 'Gemini Flash-Lite';
+    if (m.includes('flash')) return 'Gemini Flash';
+    if (m.includes('pro')) return 'Gemini Pro';
+    return 'Gemini';
+  }
+  if (m.includes('llama-4-scout') || m.includes('llama-4')) return 'Llama 4 Scout';
+  if (m.includes('llama-3.3') || m.includes('llama3.3')) return 'Llama 3.3 70B';
+  if (m.includes('llama-3.1-8b')) return 'Llama 3.1 8B';
+  if (m.includes('gpt-oss')) return 'GPT-OSS';
+  if (m.includes('qwen')) return 'Qwen';
+  // 不明なものは末尾のモデル名をそのまま
+  return model.split('/').pop() ?? model;
+}
 
 // -------------------- テキスト整形（純粋関数・単体テスト可能） --------------------
 
@@ -180,11 +201,15 @@ export function buildPostChunks(
   content: string,
   topicUrl?: string,
   hashtags?: string[],
+  modelLabel?: string,
 ): Array<{ text: string; facets?: BskyFacet[] }> {
-  const prefix = SPEAKER_PREFIX[speaker] ?? `${speaker}:\n`;
+  const label = SPEAKER_LABEL[speaker] ?? speaker;
+  // 先頭チャンクの prefix に話者ラベル + モデル名を入れる（継続チャンクは CONT_PREFIX）
+  const prefix = modelLabel ? `${label}｜${modelLabel}:\n` : `${label}:\n`;
   const body = content.trim();
 
-  // turn1/11: 短い Host 発言 + リンク。リンク付き単一投稿として扱う（実測 ≤226字で収まる）。
+  // turn1/11: 短い Host 発言 + リンク。リンク付き単一投稿として扱う（prefix+url+tag を引いた
+  // 残り ~200字に本文をトリム。Host 発言は実測でその範囲に収まる）。
   // turn1 のみ hashtags を末尾に付与（検索流入用、tag facet 付き）。
   if (topicUrl) {
     const urlSection = `\n\n${topicUrl}`;

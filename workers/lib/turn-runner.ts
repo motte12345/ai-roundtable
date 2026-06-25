@@ -19,12 +19,14 @@ import {
   createSessionWithRetry,
   postRecordWithRetry,
   buildPostChunks,
+  shortModelLabel,
   type BskyPostRef,
 } from './bluesky.js';
 
 /** 議題ページの公開 URL ベース（Bluesky 投稿のリンク用） */
 const TOPIC_URL_BASE = 'https://roundtable.simtool.dev/topic';
 
+// 各 Bluesky 投稿の先頭に shortModelLabel(result.model) でモデル簡易名を表示する
 /** Bluesky の最初の投稿(turn1)に付ける固定ハッシュタグ（検索流入用） */
 const BLUESKY_BASE_TAGS = ['AI', 'AI議論'];
 /** ジャンル別ハッシュタグ（turn1 に1つ追加。genre は topics.genre 値） */
@@ -208,7 +210,14 @@ export async function advanceOneTurn(ctx: RunContext): Promise<TurnResult> {
               : undefined;
           // 長い発言（Skeptic/Zen は実測~500字）は複数チャンクに分割し、サブ投稿として
           // 連続 reply する。turn1 は必ず単一投稿（短い Host + リンク + タグ）なので root が一意。
-          const chunks = buildPostChunks(result.speaker, result.content, topicUrl, hashtags);
+          // 各投稿の先頭に実際に使われたモデルの簡易名を入れる。
+          const chunks = buildPostChunks(
+            result.speaker,
+            result.content,
+            topicUrl,
+            hashtags,
+            shortModelLabel(result.model),
+          );
           const session = await createSessionWithRetry(
             env.BLUESKY_IDENTIFIER,
             env.BLUESKY_APP_PASSWORD,
