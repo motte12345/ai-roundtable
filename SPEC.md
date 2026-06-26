@@ -23,16 +23,18 @@
 | ID | 表示名 | 役割 | 主プロバイダ | fallback |
 |---|---|---|---|---|
 | `optimist` | Optimist | 可能性を広げる、肯定的 | Gemini 3.1 Flash-Lite（3.5/2.5-flash は503多発、実測で flash-lite のみ安定 2026-06-25） | Groq Llama 3.1 8B Instant |
-| `skeptic` | Skeptic | 前提を疑う、反論担当 | Groq Llama 3.3 70B | Cerebras gpt-oss-120b（fallback専用） |
+| `skeptic` | Skeptic | 前提を疑う、反論担当 | Groq Llama 4 Scout（2026-05-09、別TPDバケット） | Groq Llama 3.3 70B |
 | `zen` | Zen | 両者を整理、メタ視点 | Workers AI Llama 3.3 70B fp8-fast（2026-06-25更新） | Groq Llama 3.3 70B |
 | `host` | Host | 議題提示・まとめ・次議題提案 | Gemini 3.1 Flash-Lite（2026-06-24更新） | Groq Llama 3.1 8B Instant |
 
-**プロバイダ採用方針（2026-05-08 調査結果）**:
-- OpenRouter `:free` は **採用しない**（クレジット未購入時 50 RPD のみで不足）
-- Gemini 2.5 Pro は **採用しない**（2026/4 から無料利用不可、Flash 系のみ使用）
-- **Mistral も採用しない**（無料枠取得に電話番号認証必要 + APIリクエストがトレーニング利用される）
-- Cerebras は context 8192 token 制限あり → 議論履歴は直近 N 発言のみ渡す設計
-- API キーは3つで済む（Gemini / Groq / Cerebras、いずれもメアドのみで取得可能）
+裏方（議論キャラ以外）: ハイライト=Mistral Small（fallback Groq Llama 3.1 8B）、SEOタイトル=Gemini 2.5 Flash、Host メモ=Gemini 2.5 Flash-Lite。
+
+**プロバイダ採用方針（最新: 2026-06-26）**:
+- 採用中プロバイダ: **Google AI Studio（Gemini）/ Groq（Llama群）/ Cloudflare Workers AI（Zen の Llama 3.3 70B、外部キー不要）/ Mistral（ハイライトのみ）**
+- OpenRouter `:free` は不採用（クレジット未購入時 50 RPD）。Gemini 2.5 Pro / 3.5 Flash は無料枠不安定で不採用（flash-lite が安定）
+- **Cerebras は撤去**（gpt-oss-120b は日本語破綻、Zen の fallback を Groq 70B に置換 2026-06-25）
+- Mistral は電話番号認証＋学習利用ありだが**低頻度・公開コンテンツ生成（ハイライト）用途に限定**して採用
+- secret キー: Gemini / Groq / Mistral（+ Workers AI は binding なのでキー不要）
 
 ### 設定方針: シンプル（3行ルール）
 各キャラの system prompt は背景ストーリーを持たず、行動規則のみで定義する。

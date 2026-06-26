@@ -1,130 +1,95 @@
 # TODO.md — ai-roundtable
 
-最終更新: 2026-05-18
+最終更新: 2026-06-26
 
-## 直近やるべきこと
+## 要観察（オープンな確認項目）
 
-### 要観察（実装後の動作確認）
-- [ ] **議題多様性の改善効果** — Host コンテキスト注入 + 多様性ルール + 主題語チェック 3層を実装（2026-05-18）。5議題分くらい消化したら、新 host_proposed の主題分布が偏らないか確認。「creativity / happiness / emotion」あたりに新規候補が3件以上溜まったら却下されているか cron ログ（`[skip-theme-overload]`）で確認
-- [ ] **Llama 4 Scout 移行後の Skeptic 出力品質** — 文字数遵守・口調・反論のキレを2-3議題分モニタリング（2026-05-09 切替）
-- [ ] **新ジャンル推定ロジック** — 新規 host_proposed 議題のジャンルタグが妥当か確認（2026-05-10 修正）
-- [ ] **TTS ボイス選択 UI** — ユーザー側で OS 別の良いボイスに切替して品質改善するか観察（2026-05-10 追加）
+### Bluesky（次の新議題＝turn1から始まる回で総合確認）
+今セッションで投稿系を大幅に整備。次の「新議題1本まるごと」で以下を一度に見ると良い：
+- [ ] 全11ターンが投稿され**歯抜けが無い**（リトライ＋「親＝直近投稿成功ターン」復帰が効いているか）
+- [ ] 各投稿の先頭が `🟢 Optimist（楽観派）｜Gemini Flash-Lite:` のように**話者＋立場＋モデル名**表示
+- [ ] **turn1** にリンク（青く facet）＋ハッシュタグ `#AI #AI議論 #<ジャンル>`（検索でヒットするか）
+- [ ] 長い発言（Skeptic/Zen）が `(1/2)(2/2)`・`（続き）` で分割連投され繋がる
+- [ ] プロフィールに `bot` セルフラベルが付いているか（規約ベストプラクティス）
 
-### ユーザー作業待ち
+### モデル運用
+- [ ] **Workers AI の neuron 消費** — Zen=workers-ai は稼働確認済（topic432 turn7）。無料枠 10k neurons/日に Zen ~32 RPD が収まるか様子見。枯渇すると Groq 70B へ無害 fallback（ボトルネック解消効果は薄れる）。可視化や neuron budget guard は必要になったら追加
+- [ ] **Gemini 無料枠の 503 再発監視** — 現状 Optimist/Host とも安定の `gemini-3.1-flash-lite`。`gemini-3.5-flash` は混雑が解消したら Optimist を分離して声の多様性を戻す余地あり（要再実測）
+
+### 既存からの継続観察
+- [ ] **議題多様性の改善効果** — 主題語チェック3層（2026-05-18）。`[skip-theme-overload]` ログで偏り却下が機能しているか
+- [ ] **新ジャンル推定** — 新規 host_proposed のジャンルタグが妥当か
+
+## ユーザー作業待ち
 - [ ] Google Search Console プロパティ追加 + sitemap 送信
 - [ ] AdSense 申請（トラフィック様子見後に判断）
+- [ ] 高品質日本語 TTS の選択肢が出たら再検討（MeloTTS は実用不可。R2/AI binding は撤去せず保留）
 
-## 進行中
+## 検討中の打ち手（やるかは効果を見てから）
+- [ ] **ハイライト既存410件の backfill** — 当面やらない方針（新規ぶんで様子見）。やるなら `backfill-highlights.ts` に `--limit N` を足して小バッチ・夜間で（ライブcron/無料枠の食い合い回避）
+- [ ] **seo-title / host-memo の Gemini 3.x 化** — 現状 gemini-2.5-flash / 2.5-flash-lite。安定の 3.1-flash-lite に寄せる余地
+- [ ] **議論キャラの声の多様化** — 現在 Optimist/Host=Gemini Flash-Lite（同一）、Skeptic/Zen=Llama 系。配線済みの Workers AI（Gemma4 / GLM / Qwen / Kimi 等）で1キャラ別モデルに振る余地。品質を実測してから
 
-### Bluesky 投稿の堅牢化（2026-06-25）
-- [x] **スレッド停止バグ修正** — topic432 turn4 の単発失敗が parent=直前ターン固定のせいでカスケード停止していた。parent を「直近で投稿成功したターン」(`getLatestPostedBskyRefBefore`)に変更し単発失敗から自動復帰。診断は一時 `/api/_bskyprobe` で createSession/postRecord が正常なことを確認（撤去済）。デプロイ 065d5dbf
-- [x] **投稿失敗時のリトライ追加** — `createSessionWithRetry`/`postRecordWithRetry`（線形バックオフ、チャンク単位）。一時的失敗を吸収。デプロイ 9dec206b。code-reviewer APPROVE
-- [x] **最初の投稿にハッシュタグ追加** — turn1 に `#AI #AI議論 #<ジャンル別>`（tag facet 付き、検索流入用）。`buildTagSection` で byte 範囲を実測、node でデコード検証済。デプロイ 1b0d0556。code-reviewer APPROVE。タグ内容を変えたいときは turn-runner の `BLUESKY_BASE_TAGS`/`BLUESKY_GENRE_TAG`
-- [x] **各投稿にモデル簡易名を表示** — 先頭を `🟢 Optimist（楽観派）｜Gemini Flash-Lite:` 等に。`shortModelLabel(result.model)` でマップ（fallback時は実際に使われたモデルが出る）。prefix が伸びるので CHUNK_CONTENT_BUDGET 270→255 に調整。デプロイ ab00f4ab。code-reviewer APPROVE
-- [ ] **復帰確認（要観察）** — 次議題（turn1から）で `bluesky_uri` が全ターン付くか・歯抜けが起きないか確認。※topic432 は埋め戻ししない（ユーザー判断、消去済み）
+---
 
+## 完了（2026-06-24〜26 セッション）
 
-### Bluesky 本編配信（着手 2026-06-24、SPEC §8 参照）
-単一アカ・自己スレッド連投で、議論を毎ターン Bluesky に流す。集客のX案とは別系統（本編配信）。
-**実装完了・レビュー済み（tsc通過）。残りはユーザー作業（アカウント/secret）＋実機検証のみ。**
-- [x] **設計確定** — Backend Architect が詰めた（messages列追加方式・facets・冪等性・フック点）
-- [x] **`workers/lib/bluesky.ts` 実装** — createSession / buildPostText / postRecord / buildLinkFacet。grapheme(Intl.Segmenter)で300制限トリム、facetでURL付与
-- [x] **スレッド参照の永続化** — `0010_add_bluesky_refs.sql`（messages に bluesky_uri/bluesky_cid 列）+ db.ts に getMessageBskyRef/updateMessageBskyRef
-- [x] **turn-runner.ts への統合** — incrementTopicTurn 直後に best-effort 投稿（getMeta含め try で囲い議論を止めない）
-- [x] **`bluesky_enabled` メタフラグ** — 再デプロイなし停止（wrangler.toml にSQLコマンド記載）
-- [x] **話者プレフィックス整形** — `▣ Host:` / `🟢 Optimist:` / `🔴 Skeptic:` / `🟣 Zen:`
-- [x] **Env 型 + wrangler.toml コメント** — BLUESKY_IDENTIFIER / BLUESKY_APP_PASSWORD
-- [x] **レビュー** — code-reviewer（mutation等の指摘を反映済み）+ security-reviewer（secret漏洩なし・SQLバインド済み・SSRFなしを確認、対応不要）
-- [x] **Bluesky アカウント準備** — アカウント作成済み（app password 発行・bot ラベルはユーザー確認）
-- [x] **secrets 投入** — `BLUESKY_IDENTIFIER` / `BLUESKY_APP_PASSWORD` を本番 Worker に設定済み
-- [x] **マイグレーション適用** — 0010 を local + remote に直接 execute で適用（`migrations apply` はこのDBの追跡と不整合のため不使用。KNOWLEDGE 参照）。remote の messages に bluesky_uri/cid 確認済み
-- [x] **本番デプロイ** — 2026-06-24 `npm run worker:deploy` 完了（Version ffca4473）。cron 稼働中
-- [x] **初回投稿確認** — 2026-06-24、topic #428/#429 でスレッド投稿を確認。リンク(facet)・プレフィックス・bot 表示OK
-- [x] **長文切れ対策（分割連投）** — 発言が実測~500字で長すぎた → 文境界で分割しサブ投稿として連投（`buildPostChunks`/`splitContent`）
-- [x] **分割が効かないバグ修正** — `Intl.Segmenter` が Workers 実機でグラフェムを約半分しか数えず、trim/split が無効化されていた（本番feed調査で発覚：05:30〜09:00 の投稿が全部500字級フル長）。`Array.from`（コードポイント数）に置換。code-reviewer APPROVE、node実機で384字→2投稿(295/116)確認、デプロイ済み(Version b508f9e3)。※Bluesky の300は API ハード上限ではなく公式アプリの表示クリップ閾値と判明（KNOWLEDGE 参照）
-- [ ] **修正後の目視検証（要観察）** — b508f9e3 反映後に投稿される Skeptic/Zen ターンが ≤300字×2投稿に正しく分かれ、`(1/2)(2/2)`・`（続き）`が付き繋がるか確認（現 thread #429 は途中からこの挙動に切替わる混在）
-- [ ] **`bot` セルフラベル** — アカウントのプロフィールに付いているか確認（規約ベストプラクティス）
+### Bluesky 本編配信（新規構築）
+単一アカ・自己スレッド連投で議論を毎ターン流す（集客のX案とは別系統＝本編配信）。SPEC §8 参照。
+- 設計（Backend Architect）→ `workers/lib/bluesky.ts`（createSession / buildPostChunks / postRecord / facet）→ messages に `bluesky_uri`/`bluesky_cid`列（migration 0010）→ turn-runner 統合（best-effort・`bluesky_enabled` メタで停止可）
+- アカウント作成・app password・secret 投入・本番デプロイ・初回投稿確認まで完了
+- **長文分割連投**（発言実測~500字を文境界で2投稿に分割、`(i/n)`/`（続き）`）
+- **`Intl.Segmenter` が Workers 実機で約半分しか数えないバグ修正** → `Array.from`（コードポイント）に置換（trim/split が効いてなかった）
+- **スレッド停止バグ修正** — 単発失敗が「親＝直前ターン固定」でカスケード停止 → **親＝直近の投稿成功ターン**（`getLatestPostedBskyRefBefore`）で自動復帰
+- **投稿失敗時リトライ**（`createSessionWithRetry`/`postRecordWithRetry`、チャンク単位・線形バックオフ）
+- **turn1 にハッシュタグ**（`#AI #AI議論 #<ジャンル>`、tag facet・byte実測検証済）
+- **各投稿にモデル簡易名表示**（`shortModelLabel`、fallback時は実モデルが出る）
+- 全て code-reviewer APPROVE / tsc / 実機検証済
 
-### Workers AI 導入（2026-06-25）
-- [x] **Cloudflare Workers AI をプロバイダ追加** — `createWorkersAiProvider`（`env.AI.run()`、外部キー不要）。Zen primary を `@cf/meta/llama-3.3-70b-instruct-fp8-fast` に、Groq 70B を fallback に。Groq 70B の TPD ボトルネック解消狙い。code-reviewer APPROVE、デプロイ Version a2976185、コミット f3233de
-- [x] **Workers AI 失敗の原因特定・修正** — 当初 provider=groq に fallback していた。原因は二重バグ：① `env.AI.run` を detach 呼び出しで `this` ロスト（`#options` エラー）② 新モデルは OpenAI 形式 `choices[0].message.content` を返す（`{response}` でなく）。両方修正＋一時プローブで疎通確認（"こんにちは。"）。デプロイ 09653489。詳細 KNOWLEDGE
-- [ ] **【要確認】Zen が workers-ai になるか** — 修正後の次の Zen ターンで `SELECT turn_no,provider,model FROM messages WHERE speaker='zen' ORDER BY id DESC LIMIT 3`。`workers-ai` なら成功＝Groq 70B ボトルネック解消。neuron 消費も様子見
-- [x] **Optimist のモデル 503 問題を修正** — 3.5-flash(0/5)→一度 2.5-flash に戻すも実測3/5でまた落ちた→**実測で唯一5/5の `gemini-3.1-flash-lite` に統一**（Host と同じ。合計~49 RPDで枠余裕）。`geminiFlash` 関数は削除。デプロイ 55bb84e8
-- [x] **タイトル `[{tech}]` 混入バグ修正** — Host テンプレの `[{ジャンル}]` プレースホルダが literal 出力されていた。`[ジャンル]` に修正＋パーサ防御＋既存109件のタイトルをDB掃除済み
-- [ ] **【要確認】neuron 消費** — Workers AI 無料枠 10k neurons/日。Zen ~32 RPD で収まるか。枯渇すると Groq に fallback（無害だが解消効果が薄れる）。`/api/tts-status` 的な可視化や neuron budget guard 追加は効果を見てから判断
-- [ ] **【軽微バグ】議題タイトルにジャンルタグ混入** — 議題432 のタイトルが「AIとの「対話」で自己理解を深めるか **[{tech}]**」。Host closing の次議題パースで `[genre]` 表記がタイトルに残るケースがある（`extractNextTopicProposals` の正規表現 or genre 抽出漏れ）。要調査・別件
+### モデル更新・プロバイダ拡張
+- **Gemini 3.x 化**（Host=`gemini-3.1-flash-lite`）。Optimist は 3.5-flash→503多発で `gemini-3.1-flash-lite` に統一（実測 flash-lite=5/5・2.5-flash=3/5・3.5-flash=0/5）
+- **Cloudflare Workers AI をプロバイダ追加**（`env.AI.run()`、外部キー不要）。**Zen を `@cf/meta/llama-3.3-70b-instruct-fp8-fast` に移し Groq 70B の TPD ボトルネック解消**（稼働確認済）。`env.AI.run` の this ロスト＋OpenAI形式レスポンスの二重バグも踏破。Cerebras gpt-oss は削除
+- 現行割当: Optimist/Host=Gemini 3.1 Flash-Lite、Skeptic=Llama 4 Scout(Groq)、Zen=Llama 3.3 70B(Workers AI)、fallback は Groq Llama 群
 
-### モデル更新・要観察（2026-06-24）
-- [x] **Gemini 3.x へ更新** — Optimist=`gemini-3.5-flash` / Host=`gemini-3.1-flash-lite`（実API検証済、デプロイ Version 109b4513）
-- [ ] **3.x 移行後の品質観察** — 2-3議題ぶん、Optimist/Host の口調・字数遵守・thinking途切れ無しを確認。429（無料枠超過）が出ないかも監視
-- [x] **ハイライト全滅バグ修正** — 調査の結果 **0/410 件**（リリース以来一度も成功せず）。原因二重：① プロンプトがスキーマ未明示でモデルが `turn`（≠`turn_no`）を返し検証全滅 ② 全文投入で Groq 8B の TPM 6000 超過→413。修正＝プロンプトにJSON具体例＋各ターン200字truncate＋`turn_no??turn`両受け＋temp0.3。実API(Groq8B)で総合PASS確認、code-reviewer APPROVE、デプロイ Version 0b2d8711。詳細 KNOWLEDGE
-- [ ] **ハイライト反映確認（要観察）** — 0b2d8711 後に完了する議題で `highlights` が埋まるか確認（次の議題完了時）
-- [ ] **（保留・任意）既存410件の backfill** — 2026-06-24 ユーザー判断で**当面やらない**（新規ぶんだけで様子見）。やるとしても「超スロー・ちょっとずつ」方針。現 `backfill-highlights.ts` は全件一括処理なので、その時は **`--limit N` フラグを足して小バッチ（例 10件/回）で回す**改修が必要。ライブcronと無料枠の食い合いを避けるため夜間/低頻度で
-- [ ] **（任意）seo-title/host-memo も Gemini 3.x 化** — 現状 gemini-2.5-flash / 2.5-flash-lite のまま。上げるなら別途
+### バグ修正
+- **ハイライトが 0/410 で全滅していたのを修正**（リリース以来一度も成功せず）— ① プロンプト未明示でモデルが `turn`(≠`turn_no`)を返し検証全滅 ② 全文投入で Groq 8B の TPM 6000 超過→413。スキーマ具体例＋200字truncate＋`turn_no??turn`＋temp0.3で修正。反映確認済
+- **議題タイトルへの `[{tech}]` 混入修正** — Host テンプレの `[{ジャンル}]` プレースホルダが literal 出力。`[ジャンル]`＋パーサ防御＋既存109件をDB掃除
+
+---
 
 ## 未実装の機能候補
 
 ### 高優先（実装済の延長で効くもの）
-- [ ] **議論の温度メーター** — 各発言の反論度/同意度を AI 判定、ハイライト同様トークン消費あり
-- [ ] **管理ダッシュボード** — 議題承認/却下、強制再生成、NGワード設定（Cloudflare Access で認証）
-- [ ] **議題消化順の多様性化（打ち手5、保留中）** — 現在の `getNextPendingTopic` は host_proposed を作成順（古い順）で消化。直近完了議題のジャンル/主題と被らないものを優先する SQL に切替えると、生成側の偏り対策（実装済）と合わせて視聴体験の偏りも解消できる。先に生成側の効果を見てから判断
+- [ ] **provider/出力の監視** — 今セッションで「best-effort が無言で劣化」が3件（ハイライト0/410・Optimist 503・Workers AI 全fallback）。provider列・出力件数・投稿状況を定期チェックする仕組み（`/api/current` への provider 表示や日次集計）があれば早期発見できる
+- [ ] **議論の温度メーター** — 各発言の反論度/同意度を AI 判定
+- [ ] **管理ダッシュボード** — 議題承認/却下、強制再生成、NGワード設定（Cloudflare Access 認証）
+- [ ] **議題消化順の多様性化** — `getNextPendingTopic` を直近完了とジャンル/主題が被らない順に
 
-### 中優先（インパクトあるが工数中以上）
-- [ ] **動的OGP画像** — 議題タイトル入り画像をオンザフライ生成（現状は固定 `/ogp.png`）
-- [ ] **逆議題自動生成** — 同じ議題を逆順で再生成して結論が変わるか実験
-- [ ] **議題タイムカプセル** — 1年前の同日議題を表示（運営1年経過後）
+### 中優先
+- [ ] **動的OGP画像** — 議題タイトル入り画像をオンザフライ生成
+- [ ] **逆議題自動生成** — 同じ議題を逆順で再生成して結論が変わるか
+- [ ] **議題タイムカプセル** — 1年前の同日議題を表示
 
 ### 低優先（要慎重判断）
-- [ ] **新キャラ追加 / 特別ゲスト回** — 既存4キャラの相互作用が安定したので、追加するなら検証コスト大
-- [ ] **議題ごとのコメント欄** — 荒らし対策含めて重い、無料運用と相性悪い
-
-### 将来課題（外部状況待ち）
-- [ ] **高品質日本語 TTS** — MeloTTS は日本語実用不可と判明（2026-05-10）。VOICEVOX 自前ホスト / Workers AI の新モデル / Google TTS 等の選択肢が出たら再検討。インフラ（R2 / AI binding）は撤去せず保留
+- [ ] **新キャラ追加 / 特別ゲスト回** — 検証コスト大
+- [ ] **議題ごとのコメント欄** — 荒らし対策が重く無料運用と相性悪い
 
 ### 見送り
-- ~~議題提案フォーム~~ — インジェクションリスクのため見送り（投票機能で代替）
+- ~~議題提案フォーム~~ — インジェクションリスク（投票機能で代替）
 - ~~MeloTTS によるニューラル TTS~~ — 日本語フォニーム破綻で実用不可
 
-## 完了済み
+---
+
+## 完了済み（Phase 0–3）
 
 ### Phase 0–2: 基盤構築
-仕様策定、PoC、Cloudflare Workers/D1/Pages、`roundtable.simtool.dev` 割当まで完了。
+仕様策定、PoC、Cloudflare Workers/D1/Pages、`roundtable.simtool.dev` 割当。
 
 ### Phase 3: 公開・運用機能
-- **観客向け体験**
-  - 次ターンまでカウントダウン
-  - 議論TL;DR（3行要約）
-  - 関連議題リンク
-  - キャラ別発言ハイライト（Mistral 優先 / Groq fallback）
-  - 各発言に投稿日時表示
-  - Host のメモ（議題完了時に Gemini Flash-Lite が生成）
-  - 音声合成読み上げ（Web Speech API + ボイス選択UI）
-- **SEO・集客**
-  - 動的OGP メタタグ（タイトル・説明）
-  - RSS フィード（`/rss.xml`）
-  - SNS シェアボタン
-  - 議題タイトル SEO 最適化（Gemini Flash）
-  - sitemap.xml（動的）/ robots.txt / JSON-LD
-  - OGP画像生成（共通方式 `scripts/generate-ogp.mjs`）
-  - GA4 (`G-W6LWQMBRC9`)
-  - simtool-portal にリンク追加
-- **ユーザー参加**
-  - 発言ブックマーク（localStorage）
-  - 議題候補一覧 + 投票（`/candidates`、Cloudflare Turnstile + IPハッシュ多層防御）
-- **キャラ拡張**
-  - キャラプロフィールページ（`/character/:speaker`）
-  - キャラ間の関係性可視化（`/relations`、言及マトリクス + インサイト）
-- **運用・自動化**
-  - Cron 失敗 LINE 通知（致命エラー / 3回連続失敗）
-  - 失敗ターンの自動リトライ（messages 未挿入なら次 cron で同 turn_no 再試行）
-  - 既出議題の重複検知（bigram Jaccard）
-  - archive ページ + ジャンルフィルタ
-  - line-notify の collect.py に追加
-- **無料枠運用の最適化**
-  - ハイライト生成を Mistral に逃がす（Groq TPD 緩和）
-  - Skeptic を Llama 4 Scout に移動（Groq 3.3 70B TPD 半減）
-  - ジャンル推定のスコア式化 + tech 偏重解消
-- **TTS インフラ（保留中）**
-  - Workers AI MeloTTS + R2 ストレージのコード一式（生成は `tts_daily_budget=0` で停止中、将来再開用）
-  - 日次予算ガード（meta テーブル経由で無停止調整可）
-  - `/api/tts-status` で残量確認可能
+- **観客向け**: カウントダウン / TL;DR / 関連議題 / キャラ別ハイライト / 投稿日時 / Host メモ / 音声読み上げ（Web Speech + ボイス選択）
+- **SEO・集客**: 動的OGPメタ / RSS / SNSシェア / SEOタイトル / sitemap / robots / JSON-LD / OGP画像 / GA4 / portal リンク
+- **ユーザー参加**: ブックマーク / 議題候補投票（`/candidates`、Turnstile + IPハッシュ）
+- **キャラ拡張**: プロフィールページ / 関係性可視化（`/relations`）
+- **運用・自動化**: Cron失敗LINE通知 / 失敗ターン自動リトライ / 重複検知 / archive+ジャンルフィルタ / line-notify 連携
+- **無料枠最適化**: ハイライトをMistralに / SkepticをLlama 4 Scoutに / ジャンル推定スコア式化
+- **TTS インフラ（保留）**: Workers AI MeloTTS + R2 一式（`tts_daily_budget=0` で停止中）。日次予算ガード / `/api/tts-status`
